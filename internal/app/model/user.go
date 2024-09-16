@@ -14,7 +14,8 @@ type User struct {
 }
 
 func (u *User) Validate() error {
-	return validation.ValidateStruct(u,
+	return validation.ValidateStruct(
+		u,
 		validation.Field(&u.Email, validation.Required, is.Email),
 		validation.Field(&u.Password, validation.By(RequiredIF(u.EncryptedPassword == "")), validation.Length(6, 100)),
 	)
@@ -38,7 +39,7 @@ func (u *User) Sanitize() {
 }
 
 func (u *User) ComparePassword(password string) bool {
-	return bcrypt.CompareHashAndPassword([]byte(u.EncryptedPassword), []byte(password)) != nil
+	return bcrypt.CompareHashAndPassword([]byte(u.EncryptedPassword), []byte(password)) == nil
 }
 
 func encryptString(s string) (string, error) {

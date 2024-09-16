@@ -152,7 +152,6 @@ func (s *server) handleUsersCreate() http.HandlerFunc {
 			return
 		}
 
-		u.Sanitize()
 		s.respond(w, r, http.StatusCreated, u)
 	}
 }
