@@ -21,17 +21,22 @@ func (r *UserRepository) Create(u *model.User) error {
 	}
 
 	return r.store.db.QueryRow(
-		"INSERT INTO users(email, encrypted_password) VALUES ($1, $2) RETURNING id",
-		u.Email, u.EncryptedPassword,
+		"INSERT INTO users(email, encrypted_password, age, gender, name, surname, description) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+		u.Email, u.EncryptedPassword, u.Age, u.Gender, u.Name, u.Surname, u.Description,
 	).Scan(&u.ID)
 }
 
 func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
 	u := &model.User{}
-	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password FROM users WHERE email = $1", email).Scan(
+	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, gender, name, surname, description FROM users WHERE email = $1", email).Scan(
 		&u.ID,
 		&u.Email,
 		&u.EncryptedPassword,
+		&u.Age,
+		&u.Gender,
+		&u.Name,
+		&u.Surname,
+		&u.Description,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, store.ErrRecordNotFound
@@ -43,10 +48,15 @@ func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
 
 func (r *UserRepository) Find(id int) (*model.User, error) {
 	u := &model.User{}
-	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password FROM users WHERE ID = $1", id).Scan(
+	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, gender, name, surname, description FROM users WHERE ID = $1", id).Scan(
 		&u.ID,
 		&u.Email,
 		&u.EncryptedPassword,
+		&u.Age,
+		&u.Gender,
+		&u.Name,
+		&u.Surname,
+		&u.Description,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, store.ErrRecordNotFound

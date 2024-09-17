@@ -1,0 +1,15 @@
+body {
+    background-color: #29a147; /* Цвет фона */
+    color: #becc71; /* Цвет текста */
+    font-family: Arial, sans-serif; /* Шрифт */
+}
+
+h1 {
+    text-align: center; /* Выравнивание заголовка */
+    margin-bottom: 20px; /* Отступ снизу */
+}
+
+p {
+    line-height: 1.5; /* Интерлиньяж */
+    padding: 0 10px; /* Поля слева и справа */
+}

@@ -6,6 +6,7 @@ require github.com/BurntSushi/toml v1.4.0
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
+	github.com/cweill/gotests v1.6.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-ozzo/ozzo-validation v3.6.0+incompatible // indirect

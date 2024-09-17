@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Домашняя страница</title>
+    <!-- Стили -->
+    <link rel="stylesheet" href="static/css/style.css">
+  </head>
+  <body>
+    <header>
+      <nav>
+        <ul>
+          <li><a href="#">Главная</a></li>
+          <!-- Другие ссылки -->
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <!-- Текст или изображение, описывающее содержание сайта -->
+      <div class="content">
+        <!-- Здесь можно разместить текст или изображения, которые будут видны на домашней странице -->
+      </div>
+
+      <section>
+        <!-- Форма входа -->
+        <form action="/login" method="post">
+          <label for="username">Имя пользователя:</label>
+          <input type="text" id="username" name="username"><br>
+          <label for="password">Пароль:</label>
+          <input type="password" id="password" name="password"><br>
+          <button type="submit" href="#">Войти</button>
+        </form>
+
+        <!-- Кнопка регистрации -->
+        <a href="/registration">Зарегистрироваться</a>
+      </section>
+    </main>
+
+    <footer>
+      Copyright © 2023. Все права защищены.
+    </footer>
+
+    <!-- Скрипты -->
+    <script src="scripts.js"></script>
+  </body>
+</html>
