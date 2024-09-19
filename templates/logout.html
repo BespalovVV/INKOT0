@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8">
+    <title>Вывод информации</title>
+  </head>
+  <body>
+    Имя: <span id="name">{{.Name}}</span><br>
+    Фамилия: <span id="surname">{{.Surname}}</span><br>
+    E-mail: <span id="email">{{.Email}}</span><br>
+    О себе: <span id="description">{{.Description}}</span><br>
+    Возраст: <span id="age">{{.Age}}</span><br>
+    Пол: 
+    <div>
+      <label><input type="radio" name="gender" value="male" checked> Мужской</label>
+      <label><input type="radio" name="gender" value="female"> Женский</label>
+    </div>
+    <form class="form" method="post">
+        <input type="submit" value="Выйти" />
+      </form>
+  </body>
+</html>

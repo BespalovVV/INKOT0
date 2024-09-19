@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <title>Домашняя страница</title>
     <!-- Стили -->
-    <link rel="stylesheet" href="static/css/style.css">
+    <link rel="stylesheet" type="text/css" href="/static/css/style1.css">
   </head>
   <body>
     <header>
@@ -24,12 +24,12 @@
 
       <section>
         <!-- Форма входа -->
-        <form action="/login" method="post">
-          <label for="username">Имя пользователя:</label>
-          <input type="text" id="username" name="username"><br>
+        <form method="post" action="/sessions">
+          <label for="email">E-mail:</label>
+          <input type="text" id="email" name="email"><br>
           <label for="password">Пароль:</label>
           <input type="password" id="password" name="password"><br>
-          <button type="submit" href="#">Войти</button>
+          <button type="submit">Войти</button>
         </form>
 
         <!-- Кнопка регистрации -->

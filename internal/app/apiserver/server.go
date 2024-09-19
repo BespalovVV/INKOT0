@@ -57,7 +57,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) configureRouter() {
-	s.router.PathPrefix("./static").Handler(http.StripPrefix("./static", http.FileServer(http.Dir("static"))))
+	s.router.PathPrefix("/static").Handler(http.StripPrefix("/static", http.FileServer(http.Dir("static"))))
 	s.router.Use(s.setRequestID)
 	s.router.Use(s.logRequest)
 	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
@@ -230,20 +230,12 @@ func (s *server) handleUsersCreate() http.HandlerFunc {
 }
 
 func (s *server) handleSessionsCreate() http.HandlerFunc {
-	type request struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-
 	return func(w http.ResponseWriter, r *http.Request) {
-		req := &request{}
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			s.error(w, r, http.StatusBadRequest, err)
-			return
-		}
+		Email := r.PostFormValue("email")
+		Password := r.PostFormValue("password")
 
-		u, err := s.store.User().FindByEmail(req.Email)
-		if err != nil || !u.ComparePassword(req.Password) {
+		u, err := s.store.User().FindByEmail(Email)
+		if err != nil || !u.ComparePassword(Password) {
 			s.error(w, r, http.StatusUnauthorized, errIncorrectEmailOrPassword)
 			return
 		}
@@ -266,7 +258,17 @@ func (s *server) handleSessionsCreate() http.HandlerFunc {
 
 func (s *server) handleWhoami() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.respond(w, r, http.StatusOK, r.Context().Value(ctxKeyUser).(*model.User))
+		if r.Method == "POST" {
+			session, _ := s.sessionStore.Get(r, sessionName)
+			session.Values = nil
+			session.Options.MaxAge = 0
+			session.Save(r, w)
+			http.Redirect(w, r, "/", http.StatusMovedPermanently)
+		} else {
+
+			templ := template.Must(template.ParseFiles("templates/logout.html"))
+			templ.Execute(w, r.Context().Value(ctxKeyUser).(*model.User))
+		}
 	}
 }
 
