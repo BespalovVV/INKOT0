@@ -4,19 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"strconv"
 	"text/template"
 	"time"
 
 	"github.com/BespalovVV/INKOT0/internal/app/model"
 	"github.com/BespalovVV/INKOT0/internal/app/store"
 	"github.com/google/uuid"
-	"github.com/sirupsen/logrus"
-
 	"github.com/gorilla/handlers"
-
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -57,12 +57,12 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) configureRouter() {
-	s.router.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	s.router.PathPrefix("./static").Handler(http.StripPrefix("./static", http.FileServer(http.Dir("static"))))
 	s.router.Use(s.setRequestID)
 	s.router.Use(s.logRequest)
 	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
 	s.router.HandleFunc("/", s.handleHomePage())
-	s.router.HandleFunc("/profile", s.hendleProfileShow())
+	s.router.HandleFunc("/profile/{id}", s.hendleProfileShow())
 	s.router.HandleFunc("/userstest", s.handleUsersCreateTest()).Methods("POST")
 	s.router.HandleFunc("/sessions", s.handleSessionsCreate()).Methods("POST")
 	s.router.HandleFunc("/registration", s.handleUsersCreate())
@@ -121,9 +121,19 @@ func (s *server) handleHomePage() http.HandlerFunc {
 
 func (s *server) hendleProfileShow() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		templ := template.Must(template.ParseFiles("templates/profile.html"))
-		templ.Execute(w, nil)
-		s.respond(w, r, http.StatusOK, nil)
+		idString := mux.Vars(r)["id"]
+		id, err := strconv.Atoi(idString)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+		}
+		if u, err := s.store.User().Find(id); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		} else {
+			templ := template.Must(template.ParseFiles("templates/profile.html"))
+			templ.Execute(w, u)
+			s.respond(w, r, http.StatusOK, nil)
+		}
 	})
 }
 
@@ -201,14 +211,18 @@ func (s *server) handleUsersCreate() http.HandlerFunc {
 				Password:    r.FormValue("password"),
 				Age:         r.FormValue("age"),
 				Gender:      r.FormValue("gender"),
-				Description: "wwwwww",
+				Description: "",
 			}
 			if err := s.store.User().Create(u); err != nil {
 				s.error(w, r, http.StatusUnprocessableEntity, err)
 				return
 			}
-			s.respond(w, r, http.StatusCreated, u)
-			http.Redirect(w, r, "/", 301)
+			if u1, err := s.store.User().FindByEmail(u.Email); err != nil {
+				s.error(w, r, http.StatusUnprocessableEntity, err)
+				return
+			} else {
+				http.Redirect(w, r, "/profile/"+fmt.Sprint(u1.ID), http.StatusMovedPermanently)
+			}
 		} else {
 			http.ServeFile(w, r, "templates/index.html")
 		}
