@@ -62,10 +62,13 @@ func (s *server) configureRouter() {
 	s.router.Use(s.logRequest)
 	s.router.Use(handlers.CORS(handlers.AllowedOrigins([]string{"*"})))
 	s.router.HandleFunc("/", s.handleHomePage())
-	s.router.HandleFunc("/profile/{id}", s.hendleProfileShow())
 	s.router.HandleFunc("/userstest", s.handleUsersCreateTest()).Methods("POST")
+	s.router.HandleFunc("/profile/{id}", s.hendleProfileShow())
+	s.router.HandleFunc("/posts/{id}", s.handlePostShow())
+	s.router.HandleFunc("/posts/{id}/comments", s.handleCommentsForPost())
 	s.router.HandleFunc("/sessions", s.handleSessionsCreate()).Methods("POST")
 	s.router.HandleFunc("/registration", s.handleUsersCreate())
+	s.router.HandleFunc("/posts", s.handlePosts())
 
 	private := s.router.PathPrefix("/private").Subrouter()
 	private.Use(s.authenticateUser)
@@ -78,6 +81,55 @@ func (s *server) setRequestID(next http.Handler) http.Handler {
 		w.Header().Set("X-Request-ID", id)
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKeyRequestID, id)))
 	})
+}
+
+func (s *server) handlePosts() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		posts, count, err := s.store.Post().Show()
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, posts)
+	}
+}
+
+func (s *server) handleCommentsForPost() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len(r.URL.Path)-len("/comments"):]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, 455, err)
+			return
+		}
+		comments, count, err := s.store.Comment().ShowComments(num)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, comments)
+	}
+}
+
+func (s *server) handlePostShow() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/posts/"):]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, 455, err)
+			return
+		}
+		post, err := s.store.Post().Find(num)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, post)
+	}
 }
 
 func (s *server) logRequest(next http.Handler) http.Handler {
