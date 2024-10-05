@@ -17,15 +17,15 @@ func (r *CommentRepository) Create(c *model.Comment) error {
 	}
 
 	return r.store.db.QueryRow(
-		"INSERT INTO posts(owner_id, comm_body) VALUES ($1, $2) RETURNING id",
-		c.Owner_id, c.CommBody,
+		"INSERT INTO posts(owner_id, post_id, comm_body) VALUES ($1, $2, $3) RETURNING id",
+		c.Owner_id, c.Post_id, c.CommBody,
 	).Scan(&c.ID)
 }
 
 func (c *CommentRepository) ShowComments(id int) ([]*model.Comment, string, error) {
-	rows, err := c.store.db.Query("SELECT id, owner_id, post_id, comm_body, FROM comments WHERE post_id = id")
+	rows, err := c.store.db.Query("SELECT id, owner_id, post_id, comm_body FROM comments WHERE post_id = $1", id)
 	count := ""
-	c.store.db.QueryRow("SELECT COUNT(*) FROM posts").Scan(&count)
+	c.store.db.QueryRow("SELECT COUNT(*) FROM comments WHERE post_id = $1", id).Scan(&count)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound
@@ -35,7 +35,7 @@ func (c *CommentRepository) ShowComments(id int) ([]*model.Comment, string, erro
 	comments := make([]*model.Comment, 0)
 	for rows.Next() {
 		comment := new(model.Comment)
-		err := rows.Scan(&comment.ID, &comment.Owner_id, &comment.CommBody)
+		err := rows.Scan(&comment.ID, &comment.Owner_id, &comment.Post_id, &comment.CommBody)
 		if err != nil {
 			return nil, "", err
 		}

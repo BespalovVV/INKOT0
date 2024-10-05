@@ -98,7 +98,7 @@ func (s *server) handlePosts() http.HandlerFunc {
 
 func (s *server) handleCommentsForPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len(r.URL.Path)-len("/comments"):]
+		id := r.URL.Path[len("/posts/"):(len(r.URL.Path) - len("/comments"))]
 		num, err := strconv.Atoi(id)
 		if err != nil {
 			s.error(w, r, 455, err)

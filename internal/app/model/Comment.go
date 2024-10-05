@@ -7,7 +7,8 @@ import (
 type Comment struct {
 	ID       int    `json:"id"`
 	Owner_id int    `json:"owner_id"`
-	CommBody string `json:"post_body"`
+	Post_id  int    `json:"post_id"`
+	CommBody string `json:"comm_body"`
 }
 
 func (c *Comment) Validate() error {
