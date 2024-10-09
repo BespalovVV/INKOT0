@@ -17,13 +17,13 @@ func (r *PostRepository) Create(p *model.Post) error {
 	}
 
 	return r.store.db.QueryRow(
-		"INSERT INTO posts(owner_id, post_name, post_body, img_ref) VALUES ($1, $2, $3, $4) RETURNING id",
-		p.Owner_id, p.PostName, p.PostBody, p.ImgRef,
+		"INSERT INTO posts(owner_id, post_name, post_body) VALUES ($1, $2, $3) RETURNING id",
+		p.Owner_id, p.Title, p.Body,
 	).Scan(&p.ID)
 }
 
 func (r *PostRepository) Show() ([]*model.Post, string, error) {
-	rows, err := r.store.db.Query("SELECT id, owner_id, post_name, post_body, img_ref FROM posts")
+	rows, err := r.store.db.Query("SELECT id, owner_id, title, body FROM posts")
 	count := ""
 	r.store.db.QueryRow("SELECT COUNT(*) FROM posts").Scan(&count)
 	if err != nil {
@@ -35,7 +35,7 @@ func (r *PostRepository) Show() ([]*model.Post, string, error) {
 	posts := make([]*model.Post, 0)
 	for rows.Next() {
 		post := new(model.Post)
-		err := rows.Scan(&post.ID, &post.Owner_id, &post.PostName, &post.PostBody, &post.ImgRef)
+		err := rows.Scan(&post.ID, &post.Owner_id, &post.Title, &post.Body)
 		if err != nil {
 			return nil, "", err
 		}
@@ -48,10 +48,10 @@ func (r *PostRepository) Show() ([]*model.Post, string, error) {
 }
 func (r *PostRepository) Find(id int) (*model.Post, error) {
 	p := &model.Post{}
-	if err := r.store.db.QueryRow("SELECT id, post_name, post_body FROM posts WHERE ID = $1", id).Scan(
+	if err := r.store.db.QueryRow("SELECT id, title, body FROM posts WHERE ID = $1", id).Scan(
 		&p.ID,
-		&p.PostName,
-		&p.PostBody,
+		&p.Title,
+		&p.Body,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, store.ErrRecordNotFound

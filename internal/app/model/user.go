@@ -7,12 +7,11 @@ import (
 )
 
 type User struct {
-	ID                int    `json:"id"`
+	ID                int    `json:"id" db:"id"`
 	Email             string `json:"email"`
 	Password          string `json:"password,omitempty"`
 	EncryptedPassword string `json:"-"`
-	Age               string `json:"age"`
-	Gender            string `json:"gender"`
+	Age               int    `json:"age"`
 	Name              string `json:"name"`
 	Surname           string `json:"surname"`
 	Description       string `json:"description"`
@@ -24,7 +23,6 @@ func (u *User) Validate() error {
 		validation.Field(&u.Email, validation.Required, is.Email),
 		validation.Field(&u.Password, validation.By(RequiredIF(u.EncryptedPassword == "")), validation.Length(6, 100)),
 		validation.Field(&u.Age, validation.Required),
-		validation.Field(&u.Gender, validation.Required, validation.Length(2, 9)),
 		validation.Field(&u.Name, validation.Required, validation.Length(2, 25)),
 		validation.Field(&u.Surname, validation.Required, validation.Length(2, 25)),
 	)

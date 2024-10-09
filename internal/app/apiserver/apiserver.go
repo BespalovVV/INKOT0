@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/BespalovVV/INKOT0/internal/app/mw"
 	"github.com/BespalovVV/INKOT0/internal/app/store/sqlstore"
 	"github.com/gorilla/sessions"
 )
@@ -19,8 +20,9 @@ func Start(config *Config) error {
 	store := sqlstore.New(db)
 	sessionStore := sessions.NewCookieStore([]byte(config.SessionKey))
 	srv := newServer(store, sessionStore)
+	handler := mw.CorsSettings().Handler(srv.router)
 
-	return http.ListenAndServe(config.BindAddr, srv)
+	return http.ListenAndServe(config.BindAddr, handler)
 }
 
 func newDB(databaseURL string) (*sql.DB, error) {

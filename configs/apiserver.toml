@@ -1,4 +1,4 @@
 bind_addr = ":8080"
 log_level = "debug"
-database_url = "user=restapi_dev password=admin host=localhost dbname=restapi_dev sslmode=disable"
-session_key = "wqigowqieqwe21429832ywqeiuey8239y"
+database_url = "user=VLAD password=admin host=localhost dbname=Backend_golang sslmode=disable"
+session_key = "sssssssswwwwwwwwwwwwwwsssssssss"
