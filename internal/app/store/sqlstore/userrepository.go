@@ -26,6 +26,17 @@ func (r *UserRepository) Create(u *model.User) error {
 	).Scan(&u.ID)
 }
 
+func (r *UserRepository) IsFriend(id int, id1 int) bool {
+	count := 0
+	if err := r.store.db.QueryRow("SELECT COUNT(*) FROM friends WHERE user_id = $1 AND friend_id = $2", id, id1).Scan(&count); err != nil {
+		return false
+	}
+	if count > 0 {
+		return true
+	}
+	return false
+}
+
 func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
 	u := &model.User{}
 	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description FROM users WHERE email = $1", email).Scan(

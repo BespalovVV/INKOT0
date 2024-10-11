@@ -77,6 +77,7 @@ func (s *server) configureRouter() {
 	api.HandleFunc("/posts/{id}/comments", s.handleCommentsForPost())
 	api.HandleFunc("/posts/{id}", s.handlePostShow())
 	api.HandleFunc("/profile/{id}", s.hendleProfileShow())
+	api.HandleFunc("/profile/{id}/posts", s.handleProfilePostsShow()).Methods("GET")
 }
 
 func (s *server) handlePosts() http.HandlerFunc {
@@ -85,6 +86,34 @@ func (s *server) handlePosts() http.HandlerFunc {
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, posts)
+	}
+}
+
+func (s *server) handleProfilePostsShow() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Path[len("/api/profile/"):(len(r.URL.Path) - len("/posts"))]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, 455, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		posts, count, err := s.store.Post().FindByOwnerIdPublic(num)
+		if err != nil || posts == nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if r.Context().Value(ctxkeyUser) != num || s.store.User().IsFriend(num, p) {
+			posts, count, err = s.store.Post().FindByOwnerId(num)
+			if err != nil || posts == nil {
+				s.error(w, r, http.StatusUnprocessableEntity, err)
+				return
+			}
 		}
 		w.Header().Set("x-total-count", count)
 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
@@ -172,7 +201,6 @@ func (s *server) authenticateUser(next http.Handler) http.Handler {
 			s.error(w, r, http.StatusUnauthorized, err)
 			return
 		}
-		fmt.Println(UserId)
 		ctx := context.WithValue(r.Context(), ctxkeyUser, UserId)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
