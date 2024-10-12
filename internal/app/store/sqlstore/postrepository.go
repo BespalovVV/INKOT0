@@ -17,15 +17,15 @@ func (r *PostRepository) Create(p *model.Post) error {
 	}
 
 	return r.store.db.QueryRow(
-		"INSERT INTO posts(owner_id, title, body) VALUES ($1, $2, $3) RETURNING id",
-		p.Owner_id, p.Title, p.Body,
+		"INSERT INTO posts(owner_id, title, body, private) VALUES ($1, $2, $3, $4) RETURNING id",
+		p.Owner_id, p.Title, p.Body, p.IsPrivate,
 	).Scan(&p.ID)
 }
 
-func (r *PostRepository) Show() ([]*model.Post, string, error) {
-	rows, err := r.store.db.Query("SELECT id, owner_id, title, body FROM posts")
+func (r *PostRepository) Show(id int) ([]*model.Post, string, error) {
+	rows, err := r.store.db.Query("SELECT id, owner_id, title, body FROM posts WHERE owner_id != $1 AND private = false", id)
 	count := ""
-	r.store.db.QueryRow("SELECT COUNT(*) FROM posts").Scan(&count)
+	r.store.db.QueryRow("SELECT COUNT(*) FROM posts WHERE owner_id != $1 AND private = false", id).Scan(&count)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound

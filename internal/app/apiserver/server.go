@@ -74,6 +74,7 @@ func (s *server) configureRouter() {
 	api.HandleFunc("/whoami", s.handleWhoAmI()).Methods("GET")
 	api.HandleFunc("/logout", s.handleSessionDelete()).Methods("POST")
 	api.HandleFunc("/posts", s.handlePosts())
+	api.HandleFunc("/posts/create", s.handlePostsCreate())
 	api.HandleFunc("/posts/{id}/comments", s.handleCommentsForPost())
 	api.HandleFunc("/posts/{id}", s.handlePostShow())
 	api.HandleFunc("/profile/{id}", s.hendleProfileShow())
@@ -164,7 +165,9 @@ func (s *server) handleUsersFriendAccept() http.HandlerFunc {
 
 func (s *server) handlePosts() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		posts, count, err := s.store.Post().Show()
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		posts, count, err := s.store.Post().Show(p)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -335,6 +338,33 @@ func (s *server) ParseToken(accessToken string) (int, error) {
 	return claims.UserId, nil
 }
 
+func (s *server) handlePostsCreate() http.HandlerFunc {
+	type request struct {
+		Title     string `json:"title"`
+		Body      string `json:"body"`
+		IsPrivate bool   `json:"isprivate"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p0 := c.(int)
+		p := &model.Post{
+			Owner_id:  p0,
+			Title:     req.Title,
+			Body:      req.Body,
+			IsPrivate: req.IsPrivate,
+		}
+		if err := s.store.Post().Create(p); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
 func (s *server) handleUsersCreate() http.HandlerFunc {
 	type request struct {
 		Email    string `json:"email"`
@@ -363,7 +393,6 @@ func (s *server) handleUsersCreate() http.HandlerFunc {
 		}
 		u.Sanitize()
 		s.respond(w, r, http.StatusOK, nil)
-
 	}
 }
 

@@ -5,10 +5,11 @@ import (
 )
 
 type Post struct {
-	ID       int    `json:"id"`
-	Owner_id int    `json:"owner_id"`
-	Title    string `json:"title"`
-	Body     string `json:"body"`
+	ID        int    `json:"id"`
+	Owner_id  int    `json:"owner_id"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	IsPrivate bool   `json:"isprivate"`
 }
 
 func (p *Post) Validate() error {
