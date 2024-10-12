@@ -78,6 +78,88 @@ func (s *server) configureRouter() {
 	api.HandleFunc("/posts/{id}", s.handlePostShow())
 	api.HandleFunc("/profile/{id}", s.hendleProfileShow())
 	api.HandleFunc("/profile/{id}/posts", s.handleProfilePostsShow()).Methods("GET")
+	api.HandleFunc("/users/notfriends", s.handleUsersNotFriends()).Methods("GET")
+	api.HandleFunc("/users/friends", s.handleUsersFriends()).Methods("GET")
+	api.HandleFunc("/users/invite", s.handleUsersInvite()).Methods("POST")
+	api.HandleFunc("/users/friends/accept", s.handleUsersFriendAccept()).Methods("POST")
+	api.HandleFunc("/users/invite/delete", s.handleUsersInviteDelete()).Methods("POST")
+	api.HandleFunc("/users/invites", s.handleUsersInvitesShow()).Methods("GET")
+}
+
+func (s *server) handleUsersInvitesShow() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		invites, count, err := s.store.User().ShowInvites(p)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, invites)
+	}
+}
+func (s *server) handleUsersInvite() http.HandlerFunc {
+	type request struct {
+		To_user_id int `json:"to_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		err := s.store.User().SendInvite(p, req.To_user_id)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusCreated, nil)
+	}
+}
+func (s *server) handleUsersInviteDelete() http.HandlerFunc {
+	type request struct {
+		Front_user_id int `json:"front_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		err := s.store.User().DeleteInvite(p, req.Front_user_id)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) handleUsersFriendAccept() http.HandlerFunc {
+	type request struct {
+		From_user_id int `json:"from_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		err := s.store.User().AddFriend(p, req.From_user_id)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusCreated, nil)
+	}
 }
 
 func (s *server) handlePosts() http.HandlerFunc {
@@ -90,6 +172,36 @@ func (s *server) handlePosts() http.HandlerFunc {
 		w.Header().Set("x-total-count", count)
 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
 		s.respond(w, r, http.StatusOK, posts)
+	}
+}
+
+func (s *server) handleUsersFriends() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		users, count, err := s.store.User().ShowFriends(p)
+		if err != nil || users == nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, users)
+	}
+}
+
+func (s *server) handleUsersNotFriends() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		users, count, err := s.store.User().ShowUsers(p)
+		if err != nil || users == nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, users)
 	}
 }
 

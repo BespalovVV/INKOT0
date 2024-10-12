@@ -7,6 +7,12 @@ type UserRepository interface {
 	FindByEmail(string) (*model.User, error)
 	Find(int) (*model.User, error)
 	IsFriend(int, int) bool
+	ShowUsers(int) ([]*model.User, string, error)
+	AddFriend(int, int) error
+	SendInvite(int, int) error
+	ShowFriends(int) ([]*model.User, string, error)
+	ShowInvites(int) ([]*model.Invite, string, error)
+	DeleteInvite(int, int) error
 }
 
 type PostRepository interface {
