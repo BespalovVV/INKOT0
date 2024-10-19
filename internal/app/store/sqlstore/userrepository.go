@@ -13,6 +13,33 @@ type UserRepository struct {
 	store *Store
 }
 
+func (r *UserRepository) GetAll() ([]*model.User, string, error) {
+	rows, err := r.store.db.Query("SELECT id, email, age, name, surname, description FROM users")
+	if err != nil {
+		return nil, "0", err
+	}
+	count := ""
+	err = r.store.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	defer rows.Close()
+	users := make([]*model.User, 0)
+	for rows.Next() {
+		user := new(model.User)
+		rows.Scan(
+			&user.ID,
+			&user.Email,
+			&user.Age,
+			&user.Name,
+			&user.Surname,
+			&user.Description,
+		)
+		if err != nil {
+			return nil, "", err
+		}
+		users = append(users, user)
+	}
+	return users, count, nil
+}
+
 // AddFriends implements store.UserRepository.
 func (r *UserRepository) AddFriend(temp_uid int, inviter_id int) error {
 	err := r.store.db.QueryRow("CALL AddFriend($1, $2)", temp_uid, inviter_id)

@@ -15,7 +15,6 @@ func (r *PostRepository) Create(p *model.Post) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
-
 	return r.store.db.QueryRow(
 		"INSERT INTO posts(owner_id, title, body, private) VALUES ($1, $2, $3, $4) RETURNING id",
 		p.Owner_id, p.Title, p.Body, p.IsPrivate,

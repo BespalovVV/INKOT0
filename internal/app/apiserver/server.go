@@ -11,11 +11,12 @@ import (
 	"text/template"
 	"time"
 
+	auth "github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers/auth"
+	"github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers/user"
 	"github.com/BespalovVV/INKOT0/internal/app/model"
 	"github.com/BespalovVV/INKOT0/internal/app/store"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/sessions"
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,11 +28,12 @@ const (
 	userCtx                   = "userId"
 	ctxkeyUser         ctxkey = iota
 	sessionCookieName         = "user-cookie"
+	postURL                   = "/post/:id"
+	postsURL                  = "/posts"
 )
 
 var (
-	errIncorrectEmailOrPassword = errors.New("incorrect email or password")
-	errNotAuthenticated         = errors.New("not authenticated")
+	errNotAuthenticated = errors.New("not authenticated")
 )
 
 type tokenClaims struct {
@@ -40,19 +42,17 @@ type tokenClaims struct {
 }
 
 type server struct {
-	router       *mux.Router
-	logger       *logrus.Logger
-	store        store.Store
-	sessionStore sessions.Store
+	router *mux.Router
+	logger *logrus.Logger
+	store  store.Store
 }
 type ctxkey int8
 
-func newServer(store store.Store, sessionStore sessions.Store) *server {
+func newServer(store store.Store) *server {
 	s := &server{
-		router:       mux.NewRouter(),
-		logger:       logrus.New(),
-		store:        store,
-		sessionStore: sessionStore,
+		router: mux.NewRouter(),
+		logger: logrus.New(),
+		store:  store,
 	}
 
 	s.configureRouter()
@@ -65,27 +65,121 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) configureRouter() {
+	s.router.Use(s.logRequest)
 	s.router.HandleFunc("/", s.handleHomePage())
-	s.router.HandleFunc("/login", s.handleSessionsCreate()).Methods("POST")
-	s.router.HandleFunc("/registration", s.handleUsersCreate()).Methods("POST")
+	// AUTH
+	handler := auth.NewHandler(s.store)
+	handler.Register(s.router)
 
 	api := s.router.PathPrefix("/api").Subrouter()
 	api.Use(s.authenticateUser)
-	api.HandleFunc("/whoami", s.handleWhoAmI()).Methods("GET")
-	api.HandleFunc("/logout", s.handleSessionDelete()).Methods("POST")
-	api.HandleFunc("/posts", s.handlePosts())
-	api.HandleFunc("/posts/create", s.handlePostsCreate())
-	api.HandleFunc("/posts/{id}/comments", s.handleCommentsForPost())
-	api.HandleFunc("/posts/{id}", s.handlePostShow())
-	api.HandleFunc("/profile/{id}", s.hendleProfileShow())
-	api.HandleFunc("/profile/{id}/posts", s.handleProfilePostsShow()).Methods("GET")
+	// юзер сервис
+	handler = user.NewHandler(s.store)
+	handler.Register(api)
 	api.HandleFunc("/users/notfriends", s.handleUsersNotFriends()).Methods("GET")
 	api.HandleFunc("/users/friends", s.handleUsersFriends()).Methods("GET")
 	api.HandleFunc("/users/invite", s.handleUsersInvite()).Methods("POST")
 	api.HandleFunc("/users/friends/accept", s.handleUsersFriendAccept()).Methods("POST")
 	api.HandleFunc("/users/invite/delete", s.handleUsersInviteDelete()).Methods("POST")
-	api.HandleFunc("/users/invites", s.handleUsersInvitesShow()).Methods("GET")
+	api.HandleFunc("/users/invite", s.handleUsersInvitesShow()).Methods("GET")
+	// сервис постов
+	api.HandleFunc("/posts", s.handlePosts()).Methods("GET")
+	api.HandleFunc("/posts", s.handlePostsCreate()).Methods("POST")
+	api.HandleFunc("/posts/::id", s.handlePostShow())
+	api.HandleFunc("/whoami", s.handleWhoAmI()).Methods("GET")
+	api.HandleFunc("/posts/{id}/comments", s.handleCommentsForPost())
+	api.HandleFunc("/profile/{id}/posts", s.handleProfilePostsShow()).Methods("GET")
+	api.HandleFunc("/logout", s.handleSessionDelete()).Methods("POST")
+	// сервис друзей
+	// сервис запросов
+	// other routes
 }
+
+// LOGGER
+func (s *server) logRequest(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger := s.logger.WithFields(logrus.Fields{
+			"remote_addr": r.RemoteAddr,
+		})
+		logger.Infof("started %s %s", r.Method, r.RequestURI)
+
+		start := time.Now()
+		rw := &responseWriter{w, http.StatusOK}
+		next.ServeHTTP(rw, r)
+
+		var level logrus.Level
+		switch {
+		case rw.code >= 500:
+			level = logrus.ErrorLevel
+		case rw.code >= 400:
+			level = logrus.WarnLevel
+		default:
+			level = logrus.InfoLevel
+		}
+		logger.Logf(
+			level,
+			"completed with %d %s in %v",
+			rw.code,
+			http.StatusText(rw.code),
+			time.Since(start),
+		)
+	})
+}
+
+// AUTH
+func (s *server) authenticateUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header := r.Header.Get(autorizationHeader)
+		if header == "" {
+			s.error(w, r, http.StatusUnauthorized, errNotAuthenticated)
+			return
+		}
+		headerParts := strings.Split(header, " ")
+		if len(headerParts) != 2 {
+			s.error(w, r, http.StatusUnauthorized, errors.New("invalid header"))
+			return
+		}
+		UserId, err := s.ParseToken(headerParts[1])
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		ctx := context.WithValue(r.Context(), ctxkeyUser, UserId)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// token
+func (s *server) ParseToken(accessToken string) (int, error) {
+	token, err := jwt.ParseWithClaims(accessToken, &tokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("invalid signing method")
+		}
+		return []byte(signingKey), nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	claims, ok := token.Claims.(*tokenClaims)
+	if !ok {
+		return 0, errors.New("token claims are not of type *tokenClaims")
+	}
+	return claims.UserId, nil
+}
+
+// reuse
+func (s *server) error(w http.ResponseWriter, r *http.Request, code int, err error) {
+	s.respond(w, r, code, map[string]string{"error": err.Error()})
+}
+
+func (s *server) respond(w http.ResponseWriter, _ *http.Request, code int, data interface{}) {
+	w.WriteHeader(code)
+	if data != nil {
+		json.NewEncoder(w).Encode(data)
+	}
+}
+
+// USER SERVISE
 
 func (s *server) handleUsersInvitesShow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -281,63 +375,6 @@ func (s *server) handleHomePage() http.HandlerFunc {
 	})
 }
 
-func (s *server) hendleProfileShow() http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/profile/"):]
-		num, err := strconv.Atoi(id)
-		if err != nil {
-			s.error(w, r, http.StatusBadRequest, err)
-			return
-		}
-		if u, err := s.store.User().Find(num); err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		} else {
-			u.Sanitize()
-			s.respond(w, r, http.StatusOK, u)
-		}
-	})
-}
-
-func (s *server) authenticateUser(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get(autorizationHeader)
-		if header == "" {
-			s.error(w, r, http.StatusUnauthorized, errNotAuthenticated)
-			return
-		}
-		headerParts := strings.Split(header, " ")
-		if len(headerParts) != 2 {
-			s.error(w, r, http.StatusUnauthorized, errors.New("invalid header"))
-			return
-		}
-		UserId, err := s.ParseToken(headerParts[1])
-		if err != nil {
-			s.error(w, r, http.StatusUnauthorized, err)
-			return
-		}
-		ctx := context.WithValue(r.Context(), ctxkeyUser, UserId)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func (s *server) ParseToken(accessToken string) (int, error) {
-	token, err := jwt.ParseWithClaims(accessToken, &tokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("invalid signing method")
-		}
-		return []byte(signingKey), nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	claims, ok := token.Claims.(*tokenClaims)
-	if !ok {
-		return 0, errors.New("token claims are not of type *tokenClaims")
-	}
-	return claims.UserId, nil
-}
-
 func (s *server) handlePostsCreate() http.HandlerFunc {
 	type request struct {
 		Title     string `json:"title"`
@@ -365,75 +402,6 @@ func (s *server) handlePostsCreate() http.HandlerFunc {
 		s.respond(w, r, http.StatusOK, nil)
 	}
 }
-func (s *server) handleUsersCreate() http.HandlerFunc {
-	type request struct {
-		Email    string `json:"email"`
-		Password string `json:"password,omitempty"`
-		Age      int    `json:"age"`
-		Name     string `json:"name"`
-		Surname  string `json:"surname"`
-	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		req := &request{}
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			s.error(w, r, http.StatusBadRequest, err)
-			return
-		}
-		u := &model.User{
-			Name:        req.Name,
-			Surname:     req.Surname,
-			Email:       req.Email,
-			Password:    req.Password,
-			Age:         req.Age,
-			Description: "",
-		}
-		if err := s.store.User().Create(u); err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		}
-		u.Sanitize()
-		s.respond(w, r, http.StatusOK, nil)
-	}
-}
-
-func (s *server) handleSessionsCreate() http.HandlerFunc {
-	type request struct {
-		Email    string `json:"email"`
-		Password string `json:"password,omitempty"`
-	}
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		req := &request{}
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			s.error(w, r, http.StatusBadRequest, err)
-			return
-		}
-
-		u, err := s.store.User().FindByEmail(req.Email)
-		if err != nil || !u.ComparePassword(req.Password) {
-			s.error(w, r, http.StatusUnauthorized, errIncorrectEmailOrPassword)
-			return
-		}
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, &tokenClaims{
-			jwt.StandardClaims{
-				ExpiresAt: time.Now().Add(tokenTTL).Unix(),
-				IssuedAt:  time.Now().Unix(),
-			},
-			u.ID,
-		})
-		tokenr, err := token.SignedString([]byte(signingKey))
-		if err != nil {
-			s.error(w, r, http.StatusUnauthorized, nil)
-			return
-		}
-		type User struct {
-			ID    int
-			Token string
-		}
-		user := User{Token: tokenr, ID: u.ID}
-		s.respond(w, r, http.StatusOK, user)
-	}
-}
 
 func (s *server) handleSessionDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -442,16 +410,5 @@ func (s *server) handleSessionDelete() http.HandlerFunc {
 
 func (s *server) handleWhoAmI() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-	}
-}
-
-func (s *server) error(w http.ResponseWriter, r *http.Request, code int, err error) {
-	s.respond(w, r, code, map[string]string{"error": err.Error()})
-}
-
-func (s *server) respond(w http.ResponseWriter, _ *http.Request, code int, data interface{}) {
-	w.WriteHeader(code)
-	if data != nil {
-		json.NewEncoder(w).Encode(data)
 	}
 }

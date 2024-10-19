@@ -17,7 +17,7 @@ func CorsSettings() *cors.Cors {
 		},
 		AllowCredentials: true,
 		AllowedHeaders: []string{
-			"content-type", "x-request-id", "0", "authorization",
+			"content-type", "x-request-id", "0", "authorization", "x-total-count",
 		},
 		OptionsPassthrough: false,
 		ExposedHeaders: []string{
