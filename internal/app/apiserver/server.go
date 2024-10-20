@@ -85,8 +85,8 @@ func (s *server) configureRouter() {
 	api.HandleFunc("/posts/{id}", s.PostDelete()).Methods(http.MethodDelete)
 	api.HandleFunc("/posts/{id}", s.PostPatch()).Methods(http.MethodPatch)
 	api.HandleFunc("/posts/{id}/comments", s.CommentsForPost()).Methods(http.MethodGet)
-	//api.HandleFunc("/posts/{id}/comments/{id}", s.CommentDelete()).Methods(http.MethodDelete)
-	//api.HandleFunc("/posts/{id}/comments/{id}", s.CommentPatch()).Methods(http.MethodPatch)
+	api.HandleFunc("/comments/{id}", s.CommentDelete()).Methods(http.MethodDelete)
+	api.HandleFunc("/comments/{id}", s.CommentPatch()).Methods(http.MethodPatch)
 	api.HandleFunc("/users/{id}/posts", s.UserPostsShow()).Methods(http.MethodGet)
 	// сервис друзей
 	api.HandleFunc("/users/notfriends", s.UsersNotFriends()).Methods(http.MethodGet)
@@ -377,10 +377,10 @@ func (s *server) Posts() http.HandlerFunc {
 // showonepost
 func (s *server) Post() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/posts/"):]
+		id := mux.Vars(r)["id"]
 		num, err := strconv.Atoi(id)
 		if err != nil {
-			s.error(w, r, 455, err)
+			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
 		post, err := s.store.Post().Find(num)
@@ -395,10 +395,10 @@ func (s *server) Post() http.HandlerFunc {
 // users posts
 func (s *server) UserPostsShow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/profile/"):(len(r.URL.Path) - len("/posts"))]
+		id := mux.Vars(r)["id"]
 		num, err := strconv.Atoi(id)
 		if err != nil {
-			s.error(w, r, 455, err)
+			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
 		c := r.Context().Value(ctxkeyUser)
@@ -544,11 +544,10 @@ func (s *server) UsersNotFriends() http.HandlerFunc {
 // comments
 func (s *server) CommentsForPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/posts/"):(len(r.URL.Path) - len("/comments"))]
-		fmt.Print(r.URL.Path)
+		id := mux.Vars(r)["id"]
 		num, err := strconv.Atoi(id)
 		if err != nil {
-			s.error(w, r, 455, err)
+			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
 		comments, count, err := s.store.Comment().ShowComments(num)
@@ -562,44 +561,87 @@ func (s *server) CommentsForPost() http.HandlerFunc {
 	}
 }
 
-// func (s *server) CommentDelete() http.HandlerFunc {****
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		id := r.URL.Path[len("/api/posts/"):(len(r.URL.Path) - len("/comments"))]
-// 		fmt.Print(r.URL.Path)
-// 		num, err := strconv.Atoi(id)
-// 		if err != nil {
-// 			s.error(w, r, 455, err)
-// 			return
-// 		}
-// 		comments, count, err := s.store.Comment().ShowComments(num)
-// 		if err != nil {
-// 			s.error(w, r, http.StatusUnprocessableEntity, err)
-// 			return
-// 		}
-// 		w.Header().Set("x-total-count", count)
-// 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
-// 		s.respond(w, r, http.StatusOK, comments)
-// 	}
-// }
-// func (s *server) CommentsPatch() http.HandlerFunc {****
-// 	return func(w http.ResponseWriter, r *http.Request) {
-// 		id := r.URL.Path[len("/api/posts/"):(len(r.URL.Path) - len("/comments"))]
-// 		fmt.Print(r.URL.Path)
-// 		num, err := strconv.Atoi(id)
-// 		if err != nil {
-// 			s.error(w, r, 455, err)
-// 			return
-// 		}
-// 		comments, count, err := s.store.Comment().ShowComments(num)
-// 		if err != nil {
-// 			s.error(w, r, http.StatusUnprocessableEntity, err)
-// 			return
-// 		}
-// 		w.Header().Set("x-total-count", count)
-// 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
-// 		s.respond(w, r, http.StatusOK, comments)
-// 	}
-// }
+func (s *server) CommentDelete() http.HandlerFunc {
+	type request struct {
+		CommentID int `json:"id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		id := mux.Vars(r)["id"]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		post, err := s.store.Post().Find(num)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		comment, err := s.store.Comment().Find(req.CommentID)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if post.Owner_id != p && comment.Owner_id != p {
+			s.error(w, r, 455, errNotAuthenticated)
+			return
+		}
+		err = s.store.Comment().Delete(req.CommentID)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+func (s *server) CommentPatch() http.HandlerFunc {
+	type request struct {
+		CBody string `json:"body,omitempty"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		id := mux.Vars(r)["id"]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		comment, err := s.store.Comment().Find(num)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		if req.CBody == comment.Body || req.CBody == "" {
+			s.error(w, r, http.StatusBadRequest, errors.New("noChange"))
+			return
+		}
+		comment.Body = req.CBody
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		if comment.Owner_id != p {
+			s.error(w, r, 455, errNotAuthenticated)
+			return
+		}
+		err = s.store.Comment().Update(num, comment)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, comment)
+	}
+}
 
 // homepage
 func (s *server) HomePage() http.HandlerFunc {

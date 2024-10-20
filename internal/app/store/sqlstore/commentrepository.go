@@ -21,6 +21,28 @@ func (r *CommentRepository) Create(c *model.Comment) error {
 		c.Owner_id, c.Post_id, c.Body,
 	).Scan(&c.ID)
 }
+func (r *CommentRepository) Delete(id int) error {
+	err := r.store.db.QueryRow("DELETE FROM comments WHERE id = $1", id)
+	if err != nil {
+		return err.Err()
+	}
+	return nil
+}
+func (r *CommentRepository) Update(id int, comment *model.Comment) error {
+	err := r.store.db.QueryRow("UPDATE comments SET body = $2 WHERE id = $1", id, comment.Body)
+	if err != nil {
+		return err.Err()
+	}
+	return nil
+}
+func (r *CommentRepository) Find(id int) (*model.Comment, error) {
+	comment := &model.Comment{}
+	err := r.store.db.QueryRow("SELECT id, owner_id, body FROM comments WHERE id = $1", id).Scan(&comment.ID, &comment.Owner_id, &comment.Body)
+	if err != nil {
+		return nil, err
+	}
+	return comment, nil
+}
 
 func (c *CommentRepository) ShowComments(id int) ([]*model.Comment, string, error) {
 	rows, err := c.store.db.Query("SELECT id, owner_id, post_id, body FROM comments WHERE post_id = $1", id)

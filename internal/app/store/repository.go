@@ -30,5 +30,8 @@ type PostRepository interface {
 }
 type CommentRepository interface {
 	Create(*model.Comment) error
+	Delete(int) error
+	Find(int) (*model.Comment, error)
+	Update(int, *model.Comment) error
 	ShowComments(int) ([]*model.Comment, string, error)
 }
