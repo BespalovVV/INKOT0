@@ -75,7 +75,7 @@ func (r *PostRepository) Find(id int) (*model.Post, error) {
 	return p, nil
 }
 func (r *PostRepository) FindByOwnerId(id int) ([]*model.Post, string, error) {
-	rows, err := r.store.db.Query("SELECT id, owner_id, title, body FROM posts WHERE owner_id = $1", id)
+	rows, err := r.store.db.Query("SELECT id, owner_id, title, body, private FROM posts WHERE owner_id = $1", id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound
@@ -92,7 +92,7 @@ func (r *PostRepository) FindByOwnerId(id int) ([]*model.Post, string, error) {
 	posts := make([]*model.Post, 0)
 	for rows.Next() {
 		post := new(model.Post)
-		err := rows.Scan(&post.ID, &post.Owner_id, &post.Title, &post.Body)
+		err := rows.Scan(&post.ID, &post.Owner_id, &post.Title, &post.Body, &post.IsPrivate)
 		if err != nil {
 			return nil, "", err
 		}
@@ -105,7 +105,7 @@ func (r *PostRepository) FindByOwnerId(id int) ([]*model.Post, string, error) {
 }
 
 func (r *PostRepository) FindByOwnerIdPublic(id int) ([]*model.Post, string, error) {
-	rows, err := r.store.db.Query("SELECT id, owner_id, title, body FROM posts WHERE owner_id = $1 AND private = false", id)
+	rows, err := r.store.db.Query("SELECT id, owner_id, title, body, private FROM posts WHERE owner_id = $1 AND private = false", id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound
@@ -122,7 +122,7 @@ func (r *PostRepository) FindByOwnerIdPublic(id int) ([]*model.Post, string, err
 	posts := make([]*model.Post, 0)
 	for rows.Next() {
 		post := new(model.Post)
-		err := rows.Scan(&post.ID, &post.Owner_id, &post.Title, &post.Body)
+		err := rows.Scan(&post.ID, &post.Owner_id, &post.Title, &post.Body, &post.IsPrivate)
 		if err != nil {
 			return nil, "", err
 		}

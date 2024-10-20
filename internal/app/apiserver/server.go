@@ -408,7 +408,7 @@ func (s *server) UserPostsShow() http.HandlerFunc {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		if r.Context().Value(ctxkeyUser) != num || s.store.User().IsFriend(num, p) {
+		if p != num || s.store.User().IsFriend(num, p) {
 			posts, count, err = s.store.Post().FindByOwnerId(num)
 			if err != nil || posts == nil {
 				s.error(w, r, http.StatusUnprocessableEntity, err)
