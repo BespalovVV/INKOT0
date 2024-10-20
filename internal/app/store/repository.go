@@ -5,6 +5,9 @@ import "github.com/BespalovVV/INKOT0/internal/app/model"
 type UserRepository interface {
 	Create(*model.User) error
 	GetAll() ([]*model.User, string, error)
+	PatchUser(int, *model.User) (*model.User, error)
+	DeleteUser(int) error
+
 	FindByEmail(string) (*model.User, error)
 	Find(int) (*model.User, error)
 	IsFriend(int, int) bool

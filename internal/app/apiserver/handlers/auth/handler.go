@@ -19,24 +19,18 @@ var (
 )
 
 const (
-	loginURL        = "/login"
-	registrationURL = "/registration"
-
-	tokenTTL                  = 2 * time.Hour
-	signingKey                = "wqigowqieqwe21429832ywqeiuey8239y"
-	salt                      = "sdhfkojsdjlkfjsdkeeeeedd"
-	autorizationHeader        = "Authorization"
-	userCtx                   = "userId"
-	ctxkeyUser         ctxkey = iota
-	sessionCookieName         = "user-cookie"
+	loginURL           = "/login"
+	registrationURL    = "/registration"
+	tokenTTL           = 2 * time.Hour
+	signingKey         = "wqigowqieqwe21429832ywqeiuey8239y"
+	salt               = "sdhfkojsdjlkfjsdkeeeeedd"
+	autorizationHeader = "Authorization"
 )
 
 type tokenClaims struct {
 	jwt.StandardClaims
 	UserId int `json:"user_id"`
 }
-
-type ctxkey int8
 
 type handler struct {
 	store store.Store

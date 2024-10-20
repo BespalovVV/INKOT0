@@ -13,6 +13,7 @@ type UserRepository struct {
 	store *Store
 }
 
+// gerusers
 func (r *UserRepository) GetAll() ([]*model.User, string, error) {
 	rows, err := r.store.db.Query("SELECT id, email, age, name, surname, description FROM users")
 	if err != nil {
@@ -38,6 +39,74 @@ func (r *UserRepository) GetAll() ([]*model.User, string, error) {
 		users = append(users, user)
 	}
 	return users, count, nil
+}
+
+// getuser
+func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
+	u := &model.User{}
+	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description FROM users WHERE email = $1", email).Scan(
+		&u.ID,
+		&u.Email,
+		&u.EncryptedPassword,
+		&u.Age,
+		&u.Name,
+		&u.Surname,
+		&u.Description,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, store.ErrRecordNotFound
+		}
+	}
+
+	return u, nil
+}
+
+func (r *UserRepository) Find(id int) (*model.User, error) {
+	u := &model.User{}
+	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description FROM users WHERE ID = $1", id).Scan(
+		&u.ID,
+		&u.Email,
+		&u.EncryptedPassword,
+		&u.Age,
+		&u.Name,
+		&u.Surname,
+		&u.Description,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, store.ErrRecordNotFound
+		}
+	}
+
+	return u, nil
+}
+
+// put and putch and delete user
+func (r *UserRepository) PatchUser(id int, user *model.User) (*model.User, error) {
+	err := r.store.db.QueryRow("UPDATE users SET email = $2, encrypted_password = $3, age = $4, name = $5, surname = $6, description = $7 WHERE ID = $1",
+		id, user.Email, user.EncryptedPassword, user.Age, user.Name, user.Surname, user.Description,
+	)
+	if err != nil {
+		return user, err.Err()
+	}
+	return user, nil
+}
+func (r *UserRepository) DeleteUser(id int) error {
+	u := &model.User{}
+	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description FROM users WHERE ID = $1", id).Scan(
+		&u.ID,
+		&u.Email,
+		&u.EncryptedPassword,
+		&u.Age,
+		&u.Name,
+		&u.Surname,
+		&u.Description,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return store.ErrRecordNotFound
+		}
+	}
+
+	return nil
 }
 
 // AddFriends implements store.UserRepository.
@@ -196,6 +265,7 @@ func (r *UserRepository) ShowUsers(id int) ([]*model.User, string, error) {
 	return users, count, nil
 }
 
+// postuser
 func (r *UserRepository) Create(u *model.User) error {
 	if err := u.Validate(); err != nil {
 		return err
@@ -220,42 +290,4 @@ func (r *UserRepository) IsFriend(id int, id1 int) bool {
 		return true
 	}
 	return false
-}
-
-func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
-	u := &model.User{}
-	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description FROM users WHERE email = $1", email).Scan(
-		&u.ID,
-		&u.Email,
-		&u.EncryptedPassword,
-		&u.Age,
-		&u.Name,
-		&u.Surname,
-		&u.Description,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, store.ErrRecordNotFound
-		}
-	}
-
-	return u, nil
-}
-
-func (r *UserRepository) Find(id int) (*model.User, error) {
-	u := &model.User{}
-	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description FROM users WHERE ID = $1", id).Scan(
-		&u.ID,
-		&u.Email,
-		&u.EncryptedPassword,
-		&u.Age,
-		&u.Name,
-		&u.Surname,
-		&u.Description,
-	); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, store.ErrRecordNotFound
-		}
-	}
-
-	return u, nil
 }

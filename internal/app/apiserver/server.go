@@ -30,6 +30,8 @@ const (
 	sessionCookieName         = "user-cookie"
 	postURL                   = "/post/:id"
 	postsURL                  = "/posts"
+	usersURL                  = "/users"
+	userURL                   = "/users/{id}"
 )
 
 var (
@@ -76,6 +78,8 @@ func (s *server) configureRouter() {
 	// юзер сервис
 	handler = user.NewHandler(s.store)
 	handler.Register(api)
+	api.HandleFunc(userURL, s.PatchUser()).Methods(http.MethodPatch)
+
 	api.HandleFunc("/users/notfriends", s.handleUsersNotFriends()).Methods("GET")
 	api.HandleFunc("/users/friends", s.handleUsersFriends()).Methods("GET")
 	api.HandleFunc("/users/invite", s.handleUsersInvite()).Methods("POST")
@@ -180,6 +184,77 @@ func (s *server) respond(w http.ResponseWriter, _ *http.Request, code int, data 
 }
 
 // USER SERVISE
+
+func (s *server) PatchUser() http.HandlerFunc {
+	type request struct {
+		Email       string `json:"email,omitempty"`
+		Password    string `json:"password,omitempty"`
+		Age         int    `json:"age,omitempty"`
+		Name        string `json:"name,omitempty"`
+		Surname     string `json:"surname,omitempty"`
+		Description string `json:"description,omitempty"`
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		id := mux.Vars(r)["id"]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		p := 0
+		c := r.Context().Value(ctxkeyUser)
+		if c == nil {
+			s.error(w, r, 455, errNotAuthenticated)
+			return
+		} else {
+			p = c.(int)
+		}
+		if p != num || p == 0 {
+			s.error(w, r, 455, errNotAuthenticated)
+			return
+		}
+		user, err := s.store.User().Find(p)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		if req.Age != user.Age && req.Age != 0 {
+			user.Age = req.Age
+		}
+		if req.Email != user.Email && req.Email != "" {
+			user.Email = req.Email
+		}
+		if !user.ComparePassword(req.Password) && req.Password != "" {
+			err = user.BeforeCreate()
+			if err != nil {
+				s.error(w, r, http.StatusBadRequest, err)
+				return
+			}
+		} else {
+			fmt.Print("HFIOSDOFJODJJSJDPJSLK")
+		}
+		if req.Name != user.Name && req.Name != "" {
+			user.Name = req.Name
+		}
+		if req.Surname != user.Surname && req.Surname != "" {
+			user.Surname = req.Surname
+		}
+		if req.Description != user.Description && req.Description != "" {
+			user.Description = req.Description
+		}
+		if user1, err := s.store.User().PatchUser(p, user); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		} else {
+			s.respond(w, r, http.StatusOK, user1)
+		}
+	})
+}
 
 func (s *server) handleUsersInvitesShow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
