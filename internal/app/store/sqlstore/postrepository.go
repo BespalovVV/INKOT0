@@ -20,6 +20,20 @@ func (r *PostRepository) Create(p *model.Post) error {
 		p.Owner_id, p.Title, p.Body, p.IsPrivate,
 	).Scan(&p.ID)
 }
+func (r *PostRepository) Delete(id int) error {
+	err := r.store.db.QueryRow("DELETE FROM posts WHERE id = $1", id)
+	if err != nil {
+		return err.Err()
+	}
+	return nil
+}
+func (r *PostRepository) Update(id int, post *model.Post) error {
+	err := r.store.db.QueryRow("UPDATE posts SET title = $2, body = $3, private = $4 WHERE id = $1", id, post.Title, post.Body, post.IsPrivate)
+	if err != nil {
+		return err.Err()
+	}
+	return nil
+}
 
 func (r *PostRepository) Show(id int) ([]*model.Post, string, error) {
 	rows, err := r.store.db.Query("SELECT id, owner_id, title, body FROM posts WHERE owner_id != $1 AND private = false", id)
@@ -47,8 +61,9 @@ func (r *PostRepository) Show(id int) ([]*model.Post, string, error) {
 }
 func (r *PostRepository) Find(id int) (*model.Post, error) {
 	p := &model.Post{}
-	if err := r.store.db.QueryRow("SELECT id, title, body FROM posts WHERE ID = $1", id).Scan(
+	if err := r.store.db.QueryRow("SELECT id, owner_id, title, body FROM posts WHERE ID = $1", id).Scan(
 		&p.ID,
+		&p.Owner_id,
 		&p.Title,
 		&p.Body,
 	); err != nil {

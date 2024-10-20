@@ -28,8 +28,6 @@ const (
 	userCtx                   = "userId"
 	ctxkeyUser         ctxkey = iota
 	sessionCookieName         = "user-cookie"
-	postURL                   = "/post/:id"
-	postsURL                  = "/posts"
 	usersURL                  = "/users"
 	userURL                   = "/users/{id}"
 )
@@ -68,7 +66,7 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) configureRouter() {
 	s.router.Use(s.logRequest)
-	s.router.HandleFunc("/", s.handleHomePage())
+	s.router.HandleFunc("/", s.HomePage())
 	// AUTH
 	handler := auth.NewHandler(s.store)
 	handler.Register(s.router)
@@ -80,23 +78,26 @@ func (s *server) configureRouter() {
 	handler.Register(api)
 	api.HandleFunc(userURL, s.PatchUser()).Methods(http.MethodPatch)
 
-	api.HandleFunc("/users/notfriends", s.handleUsersNotFriends()).Methods("GET")
-	api.HandleFunc("/users/friends", s.handleUsersFriends()).Methods("GET")
-	api.HandleFunc("/users/invite", s.handleUsersInvite()).Methods("POST")
-	api.HandleFunc("/users/friends/accept", s.handleUsersFriendAccept()).Methods("POST")
-	api.HandleFunc("/users/invite/delete", s.handleUsersInviteDelete()).Methods("POST")
-	api.HandleFunc("/users/invite", s.handleUsersInvitesShow()).Methods("GET")
 	// сервис постов
-	api.HandleFunc("/posts", s.handlePosts()).Methods("GET")
-	api.HandleFunc("/posts", s.handlePostsCreate()).Methods("POST")
-	api.HandleFunc("/posts/::id", s.handlePostShow())
-	api.HandleFunc("/whoami", s.handleWhoAmI()).Methods("GET")
-	api.HandleFunc("/posts/{id}/comments", s.handleCommentsForPost())
-	api.HandleFunc("/profile/{id}/posts", s.handleProfilePostsShow()).Methods("GET")
-	api.HandleFunc("/logout", s.handleSessionDelete()).Methods("POST")
+	api.HandleFunc("/posts", s.Posts()).Methods(http.MethodGet)
+	api.HandleFunc("/posts", s.PostCreate()).Methods(http.MethodPost)
+	api.HandleFunc("/posts/{id}", s.Post()).Methods(http.MethodGet)
+	api.HandleFunc("/posts/{id}", s.PostDelete()).Methods(http.MethodDelete)
+	api.HandleFunc("/posts/{id}", s.PostPatch()).Methods(http.MethodPatch)
+	api.HandleFunc("/posts/{id}/comments", s.CommentsForPost()).Methods(http.MethodGet)
+	//api.HandleFunc("/posts/{id}/comments/{id}", s.CommentDelete()).Methods(http.MethodDelete)
+	//api.HandleFunc("/posts/{id}/comments/{id}", s.CommentPatch()).Methods(http.MethodPatch)
+	api.HandleFunc("/users/{id}/posts", s.UserPostsShow()).Methods(http.MethodGet)
 	// сервис друзей
+	api.HandleFunc("/users/notfriends", s.UsersNotFriends()).Methods(http.MethodGet)
+	api.HandleFunc("/users/friends", s.UserFriends()).Methods(http.MethodGet)
 	// сервис запросов
+	api.HandleFunc("/users/invite", s.UserInvitesShow()).Methods(http.MethodGet)
+	api.HandleFunc("/users/invite", s.CreateUserInvite()).Methods(http.MethodPost)
+	api.HandleFunc("/users/invite/{id}", s.UserInviteAccept()).Methods(http.MethodPost)
+	api.HandleFunc("/users/invite/{id}", s.UserInviteDelete()).Methods(http.MethodDelete)
 	// other routes
+	api.HandleFunc("/logout", s.SessionDelete()).Methods(http.MethodPost)
 }
 
 // LOGGER
@@ -184,7 +185,6 @@ func (s *server) respond(w http.ResponseWriter, _ *http.Request, code int, data 
 }
 
 // USER SERVISE
-
 func (s *server) PatchUser() http.HandlerFunc {
 	type request struct {
 		Email       string `json:"email,omitempty"`
@@ -256,23 +256,13 @@ func (s *server) PatchUser() http.HandlerFunc {
 	})
 }
 
-func (s *server) handleUsersInvitesShow() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		invites, count, err := s.store.User().ShowInvites(p)
-		if err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		}
-		w.Header().Set("x-total-count", count)
-		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
-		s.respond(w, r, http.StatusOK, invites)
-	}
-}
-func (s *server) handleUsersInvite() http.HandlerFunc {
+// postservise
+// create post
+func (s *server) PostCreate() http.HandlerFunc {
 	type request struct {
-		To_user_id int `json:"to_id"`
+		Title     string `json:"title"`
+		Body      string `json:"body"`
+		IsPrivate bool   `json:"isprivate"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &request{}
@@ -281,18 +271,52 @@ func (s *server) handleUsersInvite() http.HandlerFunc {
 			return
 		}
 		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		err := s.store.User().SendInvite(p, req.To_user_id)
+		p0 := c.(int)
+		p := &model.Post{
+			Owner_id:  p0,
+			Title:     req.Title,
+			Body:      req.Body,
+			IsPrivate: req.IsPrivate,
+		}
+		if err := s.store.Post().Create(p); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+func (s *server) PostDelete() http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := mux.Vars(r)["id"]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p0 := c.(int)
+		p, err := s.store.Post().Find(num)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		s.respond(w, r, http.StatusCreated, nil)
+		if p0 != p.Owner_id {
+			s.error(w, r, 455, errNotAuthenticated)
+			return
+		}
+		if err := s.store.Post().Delete(num); err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
 	}
 }
-func (s *server) handleUsersInviteDelete() http.HandlerFunc {
+func (s *server) PostPatch() http.HandlerFunc {
 	type request struct {
-		Front_user_id int `json:"front_id"`
+		Title     string `json:"title,omitempty"`
+		Body      string `json:"body,omitempty"`
+		IsPrivate bool   `json:"isprivate,omitempty"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &request{}
@@ -300,10 +324,33 @@ func (s *server) handleUsersInviteDelete() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		err := s.store.User().DeleteInvite(p, req.Front_user_id)
+		id := mux.Vars(r)["id"]
+		num, err := strconv.Atoi(id)
 		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p0 := c.(int)
+		p, err := s.store.Post().Find(num)
+		if err != nil {
+			s.error(w, r, 455, errNotAuthenticated)
+			return
+		}
+		if p.Owner_id != p0 {
+			s.error(w, r, 455, errNotAuthenticated)
+			return
+		}
+		if p.Title != req.Title && req.Title != "" {
+			p.Title = req.Title
+		}
+		if p.Body != req.Body && req.Body != "" {
+			p.Body = req.Body
+		}
+		if req.IsPrivate {
+			p.IsPrivate = !p.IsPrivate
+		}
+		if err := s.store.Post().Update(p.ID, p); err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
@@ -311,28 +358,8 @@ func (s *server) handleUsersInviteDelete() http.HandlerFunc {
 	}
 }
 
-func (s *server) handleUsersFriendAccept() http.HandlerFunc {
-	type request struct {
-		From_user_id int `json:"from_id"`
-	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		req := &request{}
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			s.error(w, r, http.StatusBadRequest, err)
-			return
-		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		err := s.store.User().AddFriend(p, req.From_user_id)
-		if err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		}
-		s.respond(w, r, http.StatusCreated, nil)
-	}
-}
-
-func (s *server) handlePosts() http.HandlerFunc {
+// show all posts
+func (s *server) Posts() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c := r.Context().Value(ctxkeyUser)
 		p := c.(int)
@@ -347,37 +374,26 @@ func (s *server) handlePosts() http.HandlerFunc {
 	}
 }
 
-func (s *server) handleUsersFriends() http.HandlerFunc {
+// showonepost
+func (s *server) Post() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		users, count, err := s.store.User().ShowFriends(p)
-		if err != nil || users == nil {
+		id := r.URL.Path[len("/api/posts/"):]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, 455, err)
+			return
+		}
+		post, err := s.store.Post().Find(num)
+		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		w.Header().Set("x-total-count", count)
-		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
-		s.respond(w, r, http.StatusOK, users)
+		s.respond(w, r, http.StatusOK, post)
 	}
 }
 
-func (s *server) handleUsersNotFriends() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		users, count, err := s.store.User().ShowUsers(p)
-		if err != nil || users == nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		}
-		w.Header().Set("x-total-count", count)
-		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
-		s.respond(w, r, http.StatusOK, users)
-	}
-}
-
-func (s *server) handleProfilePostsShow() http.HandlerFunc {
+// users posts
+func (s *server) UserPostsShow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Path[len("/api/profile/"):(len(r.URL.Path) - len("/posts"))]
 		num, err := strconv.Atoi(id)
@@ -405,7 +421,128 @@ func (s *server) handleProfilePostsShow() http.HandlerFunc {
 	}
 }
 
-func (s *server) handleCommentsForPost() http.HandlerFunc {
+//endpostservise
+
+// inviteservise
+// show user invites
+func (s *server) UserInvitesShow() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		invites, count, err := s.store.User().ShowInvites(p)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, invites)
+	}
+}
+
+// create invites
+func (s *server) CreateUserInvite() http.HandlerFunc {
+	type request struct {
+		To_user_id int `json:"to_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		err := s.store.User().SendInvite(p, req.To_user_id)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusCreated, nil)
+	}
+}
+
+// delete invite
+func (s *server) UserInviteDelete() http.HandlerFunc {
+	type request struct {
+		Front_user_id int `json:"front_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		err := s.store.User().DeleteInvite(p, req.Front_user_id)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
+	}
+}
+
+// accept invite
+func (s *server) UserInviteAccept() http.HandlerFunc {
+	type request struct {
+		From_user_id int `json:"from_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		err := s.store.User().AddFriend(p, req.From_user_id)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusCreated, nil)
+	}
+}
+
+// friends servise
+// show friends
+func (s *server) UserFriends() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		users, count, err := s.store.User().ShowFriends(p)
+		if err != nil || users == nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, users)
+	}
+}
+
+// show users no friends
+func (s *server) UsersNotFriends() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		users, count, err := s.store.User().ShowUsers(p)
+		if err != nil || users == nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		w.Header().Set("x-total-count", count)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, users)
+	}
+}
+
+// end friends
+
+// comments
+func (s *server) CommentsForPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Path[len("/api/posts/"):(len(r.URL.Path) - len("/comments"))]
 		fmt.Print(r.URL.Path)
@@ -425,24 +562,47 @@ func (s *server) handleCommentsForPost() http.HandlerFunc {
 	}
 }
 
-func (s *server) handlePostShow() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		id := r.URL.Path[len("/api/posts/"):]
-		num, err := strconv.Atoi(id)
-		if err != nil {
-			s.error(w, r, 455, err)
-			return
-		}
-		post, err := s.store.Post().Find(num)
-		if err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		}
-		s.respond(w, r, http.StatusOK, post)
-	}
-}
+// func (s *server) CommentDelete() http.HandlerFunc {****
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		id := r.URL.Path[len("/api/posts/"):(len(r.URL.Path) - len("/comments"))]
+// 		fmt.Print(r.URL.Path)
+// 		num, err := strconv.Atoi(id)
+// 		if err != nil {
+// 			s.error(w, r, 455, err)
+// 			return
+// 		}
+// 		comments, count, err := s.store.Comment().ShowComments(num)
+// 		if err != nil {
+// 			s.error(w, r, http.StatusUnprocessableEntity, err)
+// 			return
+// 		}
+// 		w.Header().Set("x-total-count", count)
+// 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+// 		s.respond(w, r, http.StatusOK, comments)
+// 	}
+// }
+// func (s *server) CommentsPatch() http.HandlerFunc {****
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		id := r.URL.Path[len("/api/posts/"):(len(r.URL.Path) - len("/comments"))]
+// 		fmt.Print(r.URL.Path)
+// 		num, err := strconv.Atoi(id)
+// 		if err != nil {
+// 			s.error(w, r, 455, err)
+// 			return
+// 		}
+// 		comments, count, err := s.store.Comment().ShowComments(num)
+// 		if err != nil {
+// 			s.error(w, r, http.StatusUnprocessableEntity, err)
+// 			return
+// 		}
+// 		w.Header().Set("x-total-count", count)
+// 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+// 		s.respond(w, r, http.StatusOK, comments)
+// 	}
+// }
 
-func (s *server) handleHomePage() http.HandlerFunc {
+// homepage
+func (s *server) HomePage() http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		templ := template.Must(template.ParseFiles("templates/homepage.html"))
 		templ.Execute(w, nil)
@@ -450,40 +610,8 @@ func (s *server) handleHomePage() http.HandlerFunc {
 	})
 }
 
-func (s *server) handlePostsCreate() http.HandlerFunc {
-	type request struct {
-		Title     string `json:"title"`
-		Body      string `json:"body"`
-		IsPrivate bool   `json:"isprivate"`
-	}
-	return func(w http.ResponseWriter, r *http.Request) {
-		req := &request{}
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			s.error(w, r, http.StatusBadRequest, err)
-			return
-		}
-		c := r.Context().Value(ctxkeyUser)
-		p0 := c.(int)
-		p := &model.Post{
-			Owner_id:  p0,
-			Title:     req.Title,
-			Body:      req.Body,
-			IsPrivate: req.IsPrivate,
-		}
-		if err := s.store.Post().Create(p); err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		}
-		s.respond(w, r, http.StatusOK, nil)
-	}
-}
-
-func (s *server) handleSessionDelete() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-	}
-}
-
-func (s *server) handleWhoAmI() http.HandlerFunc {
+// sessiondelete
+func (s *server) SessionDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 	}
 }

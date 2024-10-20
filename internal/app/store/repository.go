@@ -21,6 +21,8 @@ type UserRepository interface {
 
 type PostRepository interface {
 	Create(*model.Post) error
+	Delete(int) error
+	Update(int, *model.Post) error
 	Show(int) ([]*model.Post, string, error)
 	Find(int) (*model.Post, error)
 	FindByOwnerId(int) ([]*model.Post, string, error)
