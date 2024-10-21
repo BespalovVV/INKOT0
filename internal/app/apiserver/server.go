@@ -408,7 +408,7 @@ func (s *server) UserPostsShow() http.HandlerFunc {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		if p != num && s.store.User().IsFriend(num, p) {
+		if p == num || s.store.User().IsFriend(num, p) {
 			posts, count, err = s.store.Post().FindByOwnerId(num)
 			if err != nil || posts == nil {
 				s.error(w, r, http.StatusUnprocessableEntity, err)
@@ -655,5 +655,6 @@ func (s *server) HomePage() http.HandlerFunc {
 // sessiondelete
 func (s *server) SessionDelete() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r.Context().Value(ctxkeyUser)
 	}
 }

@@ -15,6 +15,7 @@ type User struct {
 	Name              string `json:"name"`
 	Surname           string `json:"surname"`
 	Description       string `json:"description"`
+	Date              string `json:"date"`
 }
 
 func (u *User) Validate() error {
