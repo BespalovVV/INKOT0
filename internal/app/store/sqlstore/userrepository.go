@@ -281,6 +281,13 @@ func (r *UserRepository) Create(u *model.User) error {
 		u.Email, u.EncryptedPassword, u.Age, u.Name, u.Surname, u.Description,
 	).Scan(&u.ID)
 }
+func (r *UserRepository) DeleteFriend(id1 int, id2 int) error {
+	err := r.store.db.QueryRow("DELETE FROM friends WHERE user_id IN ($1,$2) AND friend_id IN ($1, $2)", id1, id2)
+	if err != nil {
+		return err.Err()
+	}
+	return nil
+}
 
 func (r *UserRepository) IsFriend(id int, id1 int) bool {
 	count := 0

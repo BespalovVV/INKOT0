@@ -7,7 +7,7 @@ type UserRepository interface {
 	GetAll() ([]*model.User, string, error)
 	PatchUser(int, *model.User) (*model.User, error)
 	DeleteUser(int) error
-
+	DeleteFriend(id1 int, id2 int) error
 	FindByEmail(string) (*model.User, error)
 	Find(int) (*model.User, error)
 	IsFriend(int, int) bool

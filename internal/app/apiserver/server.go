@@ -91,6 +91,7 @@ func (s *server) configureRouter() {
 	// сервис друзей
 	api.HandleFunc("/users/notfriends", s.UsersNotFriends()).Methods(http.MethodGet)
 	api.HandleFunc("/users/friends", s.UserFriends()).Methods(http.MethodGet)
+	api.HandleFunc("/friends/{id}", s.UserFriendDelete()).Methods(http.MethodDelete)
 	// сервис запросов
 	api.HandleFunc("/users/invite", s.UserInvitesShow()).Methods(http.MethodGet)
 	api.HandleFunc("/users/invite", s.CreateUserInvite()).Methods(http.MethodPost)
@@ -536,6 +537,24 @@ func (s *server) UsersNotFriends() http.HandlerFunc {
 		w.Header().Set("x-total-count", count)
 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
 		s.respond(w, r, http.StatusOK, users)
+	}
+}
+func (s *server) UserFriendDelete() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := mux.Vars(r)["id"]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		err = s.store.User().DeleteFriend(p, num)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, nil)
 	}
 }
 
