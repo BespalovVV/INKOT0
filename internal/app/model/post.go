@@ -1,15 +1,18 @@
 package model
 
 import (
+	"database/sql"
+
 	validation "github.com/go-ozzo/ozzo-validation"
 )
 
 type Post struct {
-	ID        int    `json:"id"`
-	Owner_id  int    `json:"owner_id"`
-	Title     string `json:"title"`
-	Body      string `json:"body"`
-	IsPrivate bool   `json:"isprivate"`
+	ID        int            `json:"id"`
+	Owner_id  int            `json:"owner_id"`
+	Title     string         `json:"title"`
+	Body      string         `json:"body"`
+	IsPrivate bool           `json:"isprivate"`
+	Image     sql.NullString `json:"image,omitempty"`
 }
 
 func (p *Post) Validate() error {

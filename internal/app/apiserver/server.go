@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -261,9 +262,10 @@ func (s *server) PatchUser() http.HandlerFunc {
 // create post
 func (s *server) PostCreate() http.HandlerFunc {
 	type request struct {
-		Title     string `json:"title"`
-		Body      string `json:"body"`
-		IsPrivate bool   `json:"isprivate"`
+		Title     string         `json:"title"`
+		Body      string         `json:"body"`
+		IsPrivate bool           `json:"isprivate"`
+		Image     sql.NullString `json:"image,omitempty"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &request{}
@@ -278,6 +280,7 @@ func (s *server) PostCreate() http.HandlerFunc {
 			Title:     req.Title,
 			Body:      req.Body,
 			IsPrivate: req.IsPrivate,
+			Image:     req.Image,
 		}
 		if err := s.store.Post().Create(p); err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)

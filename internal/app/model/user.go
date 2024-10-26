@@ -1,21 +1,24 @@
 package model
 
 import (
+	"database/sql"
+
 	validation "github.com/go-ozzo/ozzo-validation"
 	"github.com/go-ozzo/ozzo-validation/is"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type User struct {
-	ID                int    `json:"id" db:"id"`
-	Email             string `json:"email"`
-	Password          string `json:"password,omitempty"`
-	EncryptedPassword string `json:"-"`
-	Age               int    `json:"age"`
-	Name              string `json:"name"`
-	Surname           string `json:"surname"`
-	Description       string `json:"description"`
-	Date              string `json:"date"`
+	ID                int            `json:"id" db:"id"`
+	Email             string         `json:"email"`
+	Password          string         `json:"password,omitempty"`
+	EncryptedPassword string         `json:"-"`
+	Age               int            `json:"age"`
+	Name              string         `json:"name"`
+	Surname           string         `json:"surname"`
+	Description       string         `json:"description"`
+	Date              string         `json:"date"`
+	Image             sql.NullString `json:"image"`
 }
 
 func (u *User) Validate() error {
