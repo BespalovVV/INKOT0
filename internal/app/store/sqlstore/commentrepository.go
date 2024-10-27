@@ -17,7 +17,7 @@ func (r *CommentRepository) Create(c *model.Comment) error {
 	}
 
 	return r.store.db.QueryRow(
-		"INSERT INTO posts(owner_id, post_id, body) VALUES ($1, $2, $3) RETURNING id",
+		"INSERT INTO comments(owner_id, post_id, body) VALUES ($1, $2, $3) RETURNING id",
 		c.Owner_id, c.Post_id, c.Body,
 	).Scan(&c.ID)
 }

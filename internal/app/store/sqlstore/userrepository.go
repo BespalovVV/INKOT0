@@ -182,7 +182,7 @@ func (r *UserRepository) ShowFriends(id int) ([]*model.User, string, error) {
 	if err = rows.Err(); err != nil {
 		return nil, "", err
 	}
-	rows0, err := r.store.db.Query(fmt.Sprintf("SELECT id, email, age, name, surname, description FROM users WHERE id IN (%v) AND id != (%d)", ids, id))
+	rows0, err := r.store.db.Query(fmt.Sprintf("SELECT id, email, age, name, surname, description, image FROM users WHERE id IN (%v) AND id != (%d)", ids, id))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound
@@ -201,6 +201,7 @@ func (r *UserRepository) ShowFriends(id int) ([]*model.User, string, error) {
 			&user.Name,
 			&user.Surname,
 			&user.Description,
+			&user.Image,
 		)
 		if err != nil {
 			return nil, "", err
@@ -235,14 +236,14 @@ func (r *UserRepository) ShowUsers(id int) ([]*model.User, string, error) {
 	if err = rows.Err(); err != nil {
 		return nil, "", err
 	}
-	rows0, err := r.store.db.Query(fmt.Sprintf("SELECT id, email, age, name, surname, description FROM users WHERE id NOT IN (%v)", ids))
+	rows0, err := r.store.db.Query(fmt.Sprintf("SELECT id, email, age, name, surname, description, image FROM users WHERE id NOT IN (%v)", ids))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound
 		}
 	}
 	count := ""
-	r.store.db.QueryRow("SELECT COUNT(*) FROM users WHERE id NOT IN ($1) AND id != $2").Scan(&count)
+	r.store.db.QueryRow("SELECT COUNT(*) FROM users WHERE id NOT IN ($1) AND id != $2", ids, id).Scan(&count)
 	defer rows0.Close()
 	users := make([]*model.User, 0)
 	for rows0.Next() {
@@ -254,6 +255,7 @@ func (r *UserRepository) ShowUsers(id int) ([]*model.User, string, error) {
 			&user.Name,
 			&user.Surname,
 			&user.Description,
+			&user.Image,
 		)
 		if err != nil {
 			return nil, "", err

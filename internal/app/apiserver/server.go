@@ -86,12 +86,13 @@ func (s *server) configureRouter() {
 	api.HandleFunc("/posts/{id}", s.PostDelete()).Methods(http.MethodDelete)
 	api.HandleFunc("/posts/{id}", s.PostPatch()).Methods(http.MethodPatch)
 	api.HandleFunc("/posts/{id}/comments", s.CommentsForPost()).Methods(http.MethodGet)
+	api.HandleFunc("/comments", s.CreateComment()).Methods(http.MethodPost)
 	api.HandleFunc("/comments/{id}", s.CommentDelete()).Methods(http.MethodDelete)
 	api.HandleFunc("/comments/{id}", s.CommentPatch()).Methods(http.MethodPatch)
 	api.HandleFunc("/users/{id}/posts", s.UserPostsShow()).Methods(http.MethodGet)
 	// сервис друзей
-	api.HandleFunc("/users/notfriends", s.UsersNotFriends()).Methods(http.MethodGet)
-	api.HandleFunc("/users/friends", s.UserFriends()).Methods(http.MethodGet)
+	api.HandleFunc("/notfriends", s.UsersNotFriends()).Methods(http.MethodGet)
+	api.HandleFunc("/friends", s.UserFriends()).Methods(http.MethodGet)
 	api.HandleFunc("/friends/{id}", s.UserFriendDelete()).Methods(http.MethodDelete)
 	// сервис запросов
 	api.HandleFunc("/users/invite", s.UserInvitesShow()).Methods(http.MethodGet)
@@ -392,6 +393,13 @@ func (s *server) Post() http.HandlerFunc {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
+		c := r.Context().Value(ctxkeyUser)
+		p0 := c.(int)
+		ok := s.store.User().IsFriend(post.Owner_id, p0)
+		if !ok {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
 		s.respond(w, r, http.StatusOK, post)
 	}
 }
@@ -564,6 +572,32 @@ func (s *server) UserFriendDelete() http.HandlerFunc {
 // end friends
 
 // comments
+func (s *server) CreateComment() http.HandlerFunc {
+	type request struct {
+		Body   string `json:"body"`
+		PostID int    `json:"post_id"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		comment := &model.Comment{
+			Body:     req.Body,
+			Owner_id: p,
+			Post_id:  req.PostID,
+		}
+		err := s.store.Comment().Create(comment)
+		if err != nil {
+			s.error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		s.respond(w, r, http.StatusOK, comment)
+	}
+}
 func (s *server) CommentsForPost() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
