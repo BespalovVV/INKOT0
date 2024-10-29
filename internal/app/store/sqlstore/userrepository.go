@@ -63,7 +63,7 @@ func (r *UserRepository) FindByEmail(email string) (*model.User, error) {
 
 func (r *UserRepository) Find(id int) (*model.User, error) {
 	u := &model.User{}
-	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description, date FROM users WHERE ID = $1", id).Scan(
+	if err := r.store.db.QueryRow("SELECT id, email, encrypted_password, age, name, surname, description, date, image FROM users WHERE ID = $1", id).Scan(
 		&u.ID,
 		&u.Email,
 		&u.EncryptedPassword,
@@ -72,6 +72,7 @@ func (r *UserRepository) Find(id int) (*model.User, error) {
 		&u.Surname,
 		&u.Description,
 		&u.Date,
+		&u.Image,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, store.ErrRecordNotFound
@@ -129,7 +130,7 @@ func (r *UserRepository) DeleteInvite(temp_uid int, inviter_id int) error {
 }
 
 func (r *UserRepository) ShowInvites(id int) ([]*model.Invite, string, error) {
-	rows, err := r.store.db.Query("SELECT id, to_id, from_id FROM invites WHERE to_id = $1", id)
+	rows, err := r.store.db.Query("SELECT id, to_id, from_id FROM invites WHERE to_id = $1 OR from_id = $1", id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound
@@ -296,7 +297,7 @@ func (r *UserRepository) IsFriend(id int, id1 int) bool {
 	if err := r.store.db.QueryRow("SELECT COUNT(*) FROM friends WHERE user_id = $1 AND friend_id = $2", id, id1).Scan(&count); err != nil {
 		return false
 	}
-	if count > 0 {
+	if count == 2 {
 		return true
 	}
 	return false

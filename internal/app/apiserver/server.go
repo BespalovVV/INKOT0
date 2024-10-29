@@ -95,10 +95,10 @@ func (s *server) configureRouter() {
 	api.HandleFunc("/friends", s.UserFriends()).Methods(http.MethodGet)
 	api.HandleFunc("/friends/{id}", s.UserFriendDelete()).Methods(http.MethodDelete)
 	// сервис запросов
-	api.HandleFunc("/users/invite", s.UserInvitesShow()).Methods(http.MethodGet)
-	api.HandleFunc("/users/invite", s.CreateUserInvite()).Methods(http.MethodPost)
-	api.HandleFunc("/users/invite/{id}", s.UserInviteAccept()).Methods(http.MethodPost)
-	api.HandleFunc("/users/invite/{id}", s.UserInviteDelete()).Methods(http.MethodDelete)
+	api.HandleFunc("/invites", s.UserInvitesShow()).Methods(http.MethodGet)
+	api.HandleFunc("/invites", s.CreateUserInvite()).Methods(http.MethodPost)
+	api.HandleFunc("/invites/{id}", s.UserInviteAccept()).Methods(http.MethodPost)
+	api.HandleFunc("/invites/{id}", s.UserInviteDelete()).Methods(http.MethodDelete)
 	// other routes
 	api.HandleFunc("/logout", s.SessionDelete()).Methods(http.MethodPost)
 }
@@ -263,10 +263,10 @@ func (s *server) PatchUser() http.HandlerFunc {
 // create post
 func (s *server) PostCreate() http.HandlerFunc {
 	type request struct {
-		Title     string         `json:"title"`
-		Body      string         `json:"body"`
-		IsPrivate bool           `json:"isprivate"`
-		Image     sql.NullString `json:"image,omitempty"`
+		Title     string `json:"title"`
+		Body      string `json:"body"`
+		IsPrivate bool   `json:"isprivate"`
+		Image     string `json:"imageurl"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		req := &request{}
@@ -276,12 +276,18 @@ func (s *server) PostCreate() http.HandlerFunc {
 		}
 		c := r.Context().Value(ctxkeyUser)
 		p0 := c.(int)
+		var image sql.NullString
+		if req.Image != "" {
+			image = sql.NullString{String: req.Image, Valid: true}
+		} else {
+			image = sql.NullString{Valid: false}
+		}
 		p := &model.Post{
 			Owner_id:  p0,
 			Title:     req.Title,
 			Body:      req.Body,
 			IsPrivate: req.IsPrivate,
-			Image:     req.Image,
+			Image:     image,
 		}
 		if err := s.store.Post().Create(p); err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
@@ -389,15 +395,19 @@ func (s *server) Post() http.HandlerFunc {
 			return
 		}
 		post, err := s.store.Post().Find(num)
+		if post == nil {
+			s.error(w, r, http.StatusNotFound, errors.New("пост не найден"))
+			return
+		}
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
 		c := r.Context().Value(ctxkeyUser)
-		p0 := c.(int)
-		ok := s.store.User().IsFriend(post.Owner_id, p0)
+		p := c.(int)
+		ok := s.store.User().IsFriend(post.Owner_id, p) || !post.IsPrivate || post.Owner_id == p
 		if !ok {
-			s.error(w, r, http.StatusUnauthorized, err)
+			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
 			return
 		}
 		s.respond(w, r, http.StatusOK, post)
@@ -585,12 +595,21 @@ func (s *server) CreateComment() http.HandlerFunc {
 		}
 		c := r.Context().Value(ctxkeyUser)
 		p := c.(int)
+		post, err := s.store.Post().Find(req.PostID)
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
+		}
+		ok := s.store.User().IsFriend(post.Owner_id, p) || !post.IsPrivate || post.Owner_id == p
+		if !ok {
+			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
+			return
+		}
 		comment := &model.Comment{
 			Body:     req.Body,
 			Owner_id: p,
 			Post_id:  req.PostID,
 		}
-		err := s.store.Comment().Create(comment)
+		err = s.store.Comment().Create(comment)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -618,40 +637,36 @@ func (s *server) CommentsForPost() http.HandlerFunc {
 }
 
 func (s *server) CommentDelete() http.HandlerFunc {
-	type request struct {
-		CommentID int `json:"id"`
-	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		req := &request{}
-		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
-			s.error(w, r, http.StatusBadRequest, err)
-			return
-		}
 		id := mux.Vars(r)["id"]
 		num, err := strconv.Atoi(id)
 		if err != nil {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		post, err := s.store.Post().Find(num)
-		if err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
-			return
-		}
 		c := r.Context().Value(ctxkeyUser)
 		p := c.(int)
-		comment, err := s.store.Comment().Find(req.CommentID)
+		comment, err := s.store.Comment().Find(num)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				s.error(w, r, http.StatusNotFound, err)
+				return
+			}
+			s.error(w, r, http.StatusInternalServerError, err)
+			return
+		}
+		post, err := s.store.Post().Find(comment.Post_id)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
 		if post.Owner_id != p && comment.Owner_id != p {
-			s.error(w, r, 455, errNotAuthenticated)
+			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
 			return
 		}
-		err = s.store.Comment().Delete(req.CommentID)
+		err = s.store.Comment().Delete(comment.ID)
 		if err != nil {
-			s.error(w, r, http.StatusUnprocessableEntity, err)
+			s.error(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		s.respond(w, r, http.StatusOK, nil)

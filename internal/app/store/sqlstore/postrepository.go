@@ -61,7 +61,7 @@ func (r *PostRepository) Show(id int) ([]*model.Post, string, error) {
 }
 func (r *PostRepository) Find(id int) (*model.Post, error) {
 	p := &model.Post{}
-	if err := r.store.db.QueryRow("SELECT id, owner_id, title, body, image, private FROM posts WHERE ID = $1", id).Scan(
+	if err := r.store.db.QueryRow("SELECT id, owner_id, title, body, image, private FROM posts WHERE id = $1", id).Scan(
 		&p.ID,
 		&p.Owner_id,
 		&p.Title,
@@ -72,8 +72,8 @@ func (r *PostRepository) Find(id int) (*model.Post, error) {
 		if err == sql.ErrNoRows {
 			return nil, store.ErrRecordNotFound
 		}
+		return nil, err
 	}
-
 	return p, nil
 }
 func (r *PostRepository) FindByOwnerId(id int) ([]*model.Post, string, error) {

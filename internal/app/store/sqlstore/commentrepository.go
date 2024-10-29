@@ -22,9 +22,9 @@ func (r *CommentRepository) Create(c *model.Comment) error {
 	).Scan(&c.ID)
 }
 func (r *CommentRepository) Delete(id int) error {
-	err := r.store.db.QueryRow("DELETE FROM comments WHERE id = $1", id)
+	_, err := r.store.db.Exec("DELETE FROM comments WHERE id = $1", id)
 	if err != nil {
-		return err.Err()
+		return err
 	}
 	return nil
 }
@@ -37,7 +37,7 @@ func (r *CommentRepository) Update(id int, comment *model.Comment) error {
 }
 func (r *CommentRepository) Find(id int) (*model.Comment, error) {
 	comment := &model.Comment{}
-	err := r.store.db.QueryRow("SELECT id, owner_id, body FROM comments WHERE id = $1", id).Scan(&comment.ID, &comment.Owner_id, &comment.Body)
+	err := r.store.db.QueryRow("SELECT id, owner_id, body, post_id FROM comments WHERE id = $1", id).Scan(&comment.ID, &comment.Owner_id, &comment.Body, &comment.Post_id)
 	if err != nil {
 		return nil, err
 	}
