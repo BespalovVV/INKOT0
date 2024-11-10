@@ -28,7 +28,6 @@ const (
 	autorizationHeader        = "Authorization"
 	userCtx                   = "userId"
 	ctxkeyUser         ctxkey = iota
-	sessionCookieName         = "user-cookie"
 	usersURL                  = "/users"
 	userURL                   = "/users/{id}"
 )
