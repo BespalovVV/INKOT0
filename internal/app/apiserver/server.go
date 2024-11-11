@@ -96,8 +96,8 @@ func (s *server) configureRouter() {
 	// сервис запросов
 	api.HandleFunc("/invites", s.UserInvitesShow()).Methods(http.MethodGet)
 	api.HandleFunc("/invites", s.CreateUserInvite()).Methods(http.MethodPost)
-	api.HandleFunc("/invites/{id}", s.UserInviteAccept()).Methods(http.MethodPost)
-	api.HandleFunc("/invites/{id}", s.UserInviteDelete()).Methods(http.MethodDelete)
+	api.HandleFunc("/inviteaccept", s.UserInviteAccept()).Methods(http.MethodPost)
+	api.HandleFunc("/invites", s.UserInviteDelete()).Methods(http.MethodDelete)
 	// other routes
 	api.HandleFunc("/logout", s.SessionDelete()).Methods(http.MethodPost)
 }

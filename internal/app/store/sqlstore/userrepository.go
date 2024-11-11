@@ -117,7 +117,6 @@ func (r *UserRepository) AddFriend(temp_uid int, inviter_id int) error {
 	if err != nil {
 		return err.Err()
 	}
-
 	return nil
 }
 
