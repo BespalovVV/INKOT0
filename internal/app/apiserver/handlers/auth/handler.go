@@ -23,7 +23,7 @@ const (
 	loginURL           = "/login"
 	registrationURL    = "/registration"
 	refreshURL         = "/refresh"
-	tokenTTL           = 20 * time.Second
+	tokenTTL           = 20 * time.Minute
 	signingKey         = "wqigowqieqwe21429832ywqeiuey8239y"
 	salt               = "sdhfkojsdjlkfjsdkeeeeedd"
 	autorizationHeader = "Authorization"
