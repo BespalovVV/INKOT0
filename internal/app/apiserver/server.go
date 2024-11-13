@@ -92,6 +92,7 @@ func (s *server) configureRouter() {
 	// сервис друзей
 	api.HandleFunc("/notfriends", s.UsersNotFriends()).Methods(http.MethodGet)
 	api.HandleFunc("/friends", s.UserFriends()).Methods(http.MethodGet)
+	api.HandleFunc("/friends/{id}", s.IsFriends()).Methods(http.MethodGet)
 	api.HandleFunc("/friends/{id}", s.UserFriendDelete()).Methods(http.MethodDelete)
 	// сервис запросов
 	api.HandleFunc("/invites", s.UserInvitesShow()).Methods(http.MethodGet)
@@ -189,6 +190,7 @@ func (s *server) respond(w http.ResponseWriter, _ *http.Request, code int, data 
 // USER SERVISE
 func (s *server) PatchUser() http.HandlerFunc {
 	type request struct {
+		Image       string `json:"image,omitempty"`
 		Email       string `json:"email,omitempty"`
 		Password    string `json:"password,omitempty"`
 		Age         int    `json:"age,omitempty"`
@@ -248,6 +250,9 @@ func (s *server) PatchUser() http.HandlerFunc {
 		}
 		if req.Description != user.Description && req.Description != "" {
 			user.Description = req.Description
+		}
+		if req.Image != user.Image.String {
+			user.Image.String = req.Image
 		}
 		if user1, err := s.store.User().PatchUser(p, user); err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
@@ -541,6 +546,22 @@ func (s *server) UserFriends() http.HandlerFunc {
 		w.Header().Set("x-total-count", count)
 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
 		s.respond(w, r, http.StatusOK, users)
+	}
+}
+func (s *server) IsFriends() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		c := r.Context().Value(ctxkeyUser)
+		p := c.(int)
+		id := mux.Vars(r)["id"]
+		num, err := strconv.Atoi(id)
+		if err != nil {
+			s.error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		state := s.store.User().IsFriend(p, num)
+		fmt.Print(state)
+		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
+		s.respond(w, r, http.StatusOK, state)
 	}
 }
 

@@ -293,10 +293,10 @@ func (r *UserRepository) DeleteFriend(id1 int, id2 int) error {
 
 func (r *UserRepository) IsFriend(id int, id1 int) bool {
 	count := 0
-	if err := r.store.db.QueryRow("SELECT COUNT(*) FROM friends WHERE user_id = $1 AND friend_id = $2", id, id1).Scan(&count); err != nil {
+	if err := r.store.db.QueryRow("SELECT COUNT(*) FROM friends WHERE user_id IN ($2, $1) AND friend_id IN ($1, $2);", id, id1).Scan(&count); err != nil {
 		return false
 	}
-	if count == 2 {
+	if count >= 1 {
 		return true
 	}
 	return false
