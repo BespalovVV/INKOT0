@@ -1,7 +1,6 @@
 package apiserver
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -12,6 +11,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/BespalovVV/INKOT0/internal/app/apiserver/context"
 	auth "github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers/auth"
 	"github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers/user"
 	"github.com/BespalovVV/INKOT0/internal/app/model"
@@ -22,14 +22,14 @@ import (
 )
 
 const (
-	tokenTTL                  = 2 * time.Hour
-	signingKey                = "wqigowqieqwe21429832ywqeiuey8239y"
-	salt                      = "sdhfkojsdjlkfjsdkeeeeedd"
-	autorizationHeader        = "Authorization"
-	userCtx                   = "userId"
-	ctxkeyUser         ctxkey = iota
-	usersURL                  = "/users"
-	userURL                   = "/users/{id}"
+	authorizationHeader        = "Authorization"
+	tokenTTL                   = 2 * time.Hour
+	ctxkeyUser          ctxkey = iota
+	signingKey                 = "wqigowqieqwe21429832ywqeiuey8239y"
+	salt                       = "sdhfkojsdjlkfjsdkeeeeedd"
+	userCtx                    = "userId"
+	usersURL                   = "/users"
+	userURL                    = "/users/{id}"
 )
 
 var (
@@ -137,22 +137,29 @@ func (s *server) logRequest(next http.Handler) http.Handler {
 // AUTH
 func (s *server) authenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := r.Header.Get(autorizationHeader)
+		// Чтение авторизационного заголовка
+		header := r.Header.Get(authorizationHeader)
 		if header == "" {
-			s.error(w, r, http.StatusUnauthorized, errNotAuthenticated)
+			s.error(w, r, http.StatusUnauthorized, errors.New("not authenticated"))
 			return
 		}
+
+		// Парсинг токена
 		headerParts := strings.Split(header, " ")
 		if len(headerParts) != 2 {
 			s.error(w, r, http.StatusUnauthorized, errors.New("invalid header"))
 			return
 		}
-		UserId, err := s.ParseToken(headerParts[1])
+
+		// Получаем ID пользователя из токена
+		userID, err := s.ParseToken(headerParts[1])
 		if err != nil {
 			s.error(w, r, http.StatusUnauthorized, err)
 			return
 		}
-		ctx := context.WithValue(r.Context(), ctxkeyUser, UserId)
+
+		// Создаем контекст с информацией о пользователе
+		ctx := context.SetUser(r.Context(), userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -204,29 +211,36 @@ func (s *server) PatchUser() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
+
+		// Получаем ID пользователя из URL
 		id := mux.Vars(r)["id"]
 		num, err := strconv.Atoi(id)
 		if err != nil {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		p := 0
-		c := r.Context().Value(ctxkeyUser)
-		if c == nil {
-			s.error(w, r, 455, errNotAuthenticated)
-			return
-		} else {
-			p = c.(int)
-		}
-		if p != num || p == 0 {
-			s.error(w, r, 455, errNotAuthenticated)
+
+		// Извлекаем ID пользователя из контекста
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
 			return
 		}
-		user, err := s.store.User().Find(p)
+
+		// Проверяем, что запрашиваемый ID совпадает с ID в контексте
+		if userID != num || userID == 0 {
+			s.error(w, r, http.StatusUnauthorized, errors.New("not authenticated"))
+			return
+		}
+
+		// Находим пользователя по ID
+		user, err := s.store.User().Find(userID)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
+
+		// Обновляем данные пользователя
 		if req.Age != user.Age && req.Age != 0 {
 			user.Age = req.Age
 		}
@@ -239,8 +253,6 @@ func (s *server) PatchUser() http.HandlerFunc {
 				s.error(w, r, http.StatusBadRequest, err)
 				return
 			}
-		} else {
-			fmt.Print("HFIOSDOFJODJJSJDPJSLK")
 		}
 		if req.Name != user.Name && req.Name != "" {
 			user.Name = req.Name
@@ -254,7 +266,9 @@ func (s *server) PatchUser() http.HandlerFunc {
 		if req.Image != user.Image.String {
 			user.Image.String = req.Image
 		}
-		if user1, err := s.store.User().PatchUser(p, user); err != nil {
+
+		// Сохраняем изменения
+		if user1, err := s.store.User().PatchUser(userID, user); err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		} else {
@@ -278,22 +292,32 @@ func (s *server) PostCreate() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p0 := c.(int)
+
+		// Получаем ID пользователя из контекста
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+
 		var image sql.NullString
 		if req.Image != "" {
 			image = sql.NullString{String: req.Image, Valid: true}
 		} else {
 			image = sql.NullString{Valid: false}
 		}
-		p := &model.Post{
-			Owner_id:  p0,
+
+		// Создаем новый пост
+		post := &model.Post{
+			Owner_id:  userID,
 			Title:     req.Title,
 			Body:      req.Body,
 			IsPrivate: req.IsPrivate,
 			Image:     image,
 		}
-		if err := s.store.Post().Create(p); err != nil {
+
+		// Сохраняем пост
+		if err := s.store.Post().Create(post); err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
@@ -309,14 +333,17 @@ func (s *server) PostDelete() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p0 := c.(int)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
 		p, err := s.store.Post().Find(num)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		if p0 != p.Owner_id {
+		if userID != p.Owner_id {
 			s.error(w, r, 455, errNotAuthenticated)
 			return
 		}
@@ -345,14 +372,17 @@ func (s *server) PostPatch() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p0 := c.(int)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
 		p, err := s.store.Post().Find(num)
 		if err != nil {
 			s.error(w, r, 455, errNotAuthenticated)
 			return
 		}
-		if p.Owner_id != p0 {
+		if p.Owner_id != userID {
 			s.error(w, r, 455, errNotAuthenticated)
 			return
 		}
@@ -376,9 +406,12 @@ func (s *server) PostPatch() http.HandlerFunc {
 // show all posts
 func (s *server) Posts() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		posts, count, err := s.store.Post().Show(p)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		posts, count, err := s.store.Post().Show(userID)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -407,9 +440,12 @@ func (s *server) Post() http.HandlerFunc {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		ok := s.store.User().IsFriend(post.Owner_id, p) || !post.IsPrivate || post.Owner_id == p
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		ok := s.store.User().IsFriend(post.Owner_id, userID) || !post.IsPrivate || post.Owner_id == userID
 		if !ok {
 			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
 			return
@@ -427,14 +463,17 @@ func (s *server) UserPostsShow() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
 		posts, count, err := s.store.Post().FindByOwnerIdPublic(num)
 		if err != nil || posts == nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		if p == num || s.store.User().IsFriend(num, p) {
+		if userID == num || s.store.User().IsFriend(num, userID) {
 			posts, count, err = s.store.Post().FindByOwnerId(num)
 			if err != nil || posts == nil {
 				s.error(w, r, http.StatusUnprocessableEntity, err)
@@ -453,9 +492,12 @@ func (s *server) UserPostsShow() http.HandlerFunc {
 // show user invites
 func (s *server) UserInvitesShow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		invites, count, err := s.store.User().ShowInvites(p)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		invites, count, err := s.store.User().ShowInvites(userID)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -477,9 +519,12 @@ func (s *server) CreateUserInvite() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		err := s.store.User().SendInvite(p, req.To_user_id)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		err = s.store.User().SendInvite(userID, req.To_user_id)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -499,9 +544,12 @@ func (s *server) UserInviteDelete() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		err := s.store.User().DeleteInvite(p, req.Front_user_id)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		err = s.store.User().DeleteInvite(userID, req.Front_user_id)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -521,9 +569,12 @@ func (s *server) UserInviteAccept() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		err := s.store.User().AddFriend(p, req.From_user_id)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		err = s.store.User().AddFriend(userID, req.From_user_id)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -536,9 +587,12 @@ func (s *server) UserInviteAccept() http.HandlerFunc {
 // show friends
 func (s *server) UserFriends() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		users, count, err := s.store.User().ShowFriends(p)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		users, count, err := s.store.User().ShowFriends(userID)
 		if err != nil || users == nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -550,15 +604,18 @@ func (s *server) UserFriends() http.HandlerFunc {
 }
 func (s *server) IsFriends() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
 		id := mux.Vars(r)["id"]
 		num, err := strconv.Atoi(id)
 		if err != nil {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		state := s.store.User().IsFriend(p, num)
+		state := s.store.User().IsFriend(userID, num)
 		fmt.Print(state)
 		w.Header().Add("Access-Control-Expose-Headers", "x-total-count")
 		s.respond(w, r, http.StatusOK, state)
@@ -568,9 +625,12 @@ func (s *server) IsFriends() http.HandlerFunc {
 // show users no friends
 func (s *server) UsersNotFriends() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		users, count, err := s.store.User().ShowUsers(p)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		users, count, err := s.store.User().ShowUsers(userID)
 		if err != nil || users == nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -588,9 +648,12 @@ func (s *server) UserFriendDelete() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		err = s.store.User().DeleteFriend(p, num)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		err = s.store.User().DeleteFriend(userID, num)
 		if err != nil {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -613,20 +676,23 @@ func (s *server) CreateComment() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
 		post, err := s.store.Post().Find(req.PostID)
 		if err != nil {
 			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
 		}
-		ok := s.store.User().IsFriend(post.Owner_id, p) || !post.IsPrivate || post.Owner_id == p
+		ok := s.store.User().IsFriend(post.Owner_id, userID) || !post.IsPrivate || post.Owner_id == userID
 		if !ok {
 			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
 			return
 		}
 		comment := &model.Comment{
 			Body:     req.Body,
-			Owner_id: p,
+			Owner_id: userID,
 			Post_id:  req.PostID,
 		}
 		err = s.store.Comment().Create(comment)
@@ -664,8 +730,11 @@ func (s *server) CommentDelete() http.HandlerFunc {
 			s.error(w, r, http.StatusBadRequest, err)
 			return
 		}
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
 		comment, err := s.store.Comment().Find(num)
 		if err != nil {
 			if err == sql.ErrNoRows {
@@ -680,7 +749,7 @@ func (s *server) CommentDelete() http.HandlerFunc {
 			s.error(w, r, http.StatusUnprocessableEntity, err)
 			return
 		}
-		if post.Owner_id != p && comment.Owner_id != p {
+		if post.Owner_id != userID && comment.Owner_id != userID {
 			s.error(w, r, http.StatusUnauthorized, errors.New("нет доступа"))
 			return
 		}
@@ -719,9 +788,12 @@ func (s *server) CommentPatch() http.HandlerFunc {
 			return
 		}
 		comment.Body = req.CBody
-		c := r.Context().Value(ctxkeyUser)
-		p := c.(int)
-		if comment.Owner_id != p {
+		userID, err := context.GetUser(r.Context())
+		if err != nil {
+			s.error(w, r, http.StatusUnauthorized, err)
+			return
+		}
+		if comment.Owner_id != userID {
 			s.error(w, r, 455, errNotAuthenticated)
 			return
 		}
