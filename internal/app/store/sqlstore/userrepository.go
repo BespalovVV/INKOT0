@@ -19,7 +19,7 @@ func (r *UserRepository) GetAll() ([]*model.User, string, error) {
 	if err != nil {
 		return nil, "0", err
 	}
-	count := ""
+	count := "0"
 	err = r.store.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	defer rows.Close()
 	users := make([]*model.User, 0)
@@ -34,7 +34,7 @@ func (r *UserRepository) GetAll() ([]*model.User, string, error) {
 			&user.Description,
 		)
 		if err != nil {
-			return nil, "", err
+			return nil, "0", err
 		}
 		users = append(users, user)
 	}
