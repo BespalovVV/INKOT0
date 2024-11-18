@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/BespalovVV/INKOT0/internal/app/apiserver/context"
+	"github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers"
 	auth "github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers/auth"
 	"github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers/auth/token"
 	"github.com/BespalovVV/INKOT0/internal/app/apiserver/handlers/comment"
@@ -21,28 +22,22 @@ import (
 )
 
 const (
-	authorizationHeader        = "Authorization"
-	tokenTTL                   = 2 * time.Hour
-	ctxkeyUser          ctxkey = iota
-	signingKey                 = "wqigowqieqwe21429832ywqeiuey8239y"
-	salt                       = "sdhfkojsdjlkfjsdkeeeeedd"
-	userCtx                    = "userId"
-	usersURL                   = "/users"
-	userURL                    = "/users/{id}"
+	authorizationHeader = "Authorization"
 )
 
 type server struct {
 	router *mux.Router
 	logger *logrus.Logger
 	store  store.Store
+	config *Config
 }
-type ctxkey int8
 
-func newServer(store store.Store) *server {
+func newServer(store store.Store, config *Config) *server {
 	s := &server{
 		router: mux.NewRouter(),
 		logger: logrus.New(),
 		store:  store,
+		config: config,
 	}
 
 	s.configureRouter()
@@ -56,27 +51,26 @@ func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) configureRouter() {
 	s.router.Use(s.logRequest)
-	// AUTH
-	handler := auth.NewHandler(s.store)
+
+	handler := auth.NewHandler(s.store, (*auth.Config)(s.config))
 	handler.Register(s.router)
 
 	api := s.router.PathPrefix("/api").Subrouter()
 	api.Use(s.authenticateUser)
-	// юзер сервис
-	handler = user.NewHandler(s.store)
-	handler.Register(api)
-	// сервис постов
-	handler = post.NewHandler(s.store)
-	handler.Register(api)
-	// сервис комментариев
-	handler = comment.NewHandler(s.store)
-	handler.Register(api)
-	// сервис друзей
-	handler = friend.NewHandler(s.store)
-	handler.Register(api)
-	// сервис запросов
-	handler = invite.NewHandler(s.store)
-	handler.Register(api)
+
+	handlers := []struct {
+		handler handlers.Handler
+	}{
+		{user.NewHandler(s.store)},
+		{post.NewHandler(s.store)},
+		{comment.NewHandler(s.store)},
+		{friend.NewHandler(s.store)},
+		{invite.NewHandler(s.store)},
+	}
+
+	for _, h := range handlers {
+		h.handler.Register(api)
+	}
 }
 func (s *server) authenticateUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +86,7 @@ func (s *server) authenticateUser(next http.Handler) http.Handler {
 			return
 		}
 
-		userID, err := token.ParseToken(headerParts[1])
+		userID, err := token.ParseToken(headerParts[1], (*token.Config)(s.config))
 		if err != nil {
 			s.Error(w, r, http.StatusUnauthorized, err)
 			return
@@ -107,30 +101,36 @@ func (s *server) authenticateUser(next http.Handler) http.Handler {
 func (s *server) logRequest(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger := s.logger.WithFields(logrus.Fields{
+			"method":      r.Method,
+			"uri":         r.RequestURI,
 			"remote_addr": r.RemoteAddr,
+			"user_agent":  r.UserAgent(),
 		})
-		logger.Infof("started %s %s", r.Method, r.RequestURI)
+		logger.Infof("Request started")
 
 		start := time.Now()
+
 		rw := &responseWriter{w, http.StatusOK}
 		next.ServeHTTP(rw, r)
 
+		duration := time.Since(start)
+		status := rw.code
+		statusText := http.StatusText(status)
+
 		var level logrus.Level
-		switch {
-		case rw.code >= 500:
+		if status >= 500 {
 			level = logrus.ErrorLevel
-		case rw.code >= 400:
+		} else if status >= 400 {
 			level = logrus.WarnLevel
-		default:
+		} else {
 			level = logrus.InfoLevel
 		}
-		logger.Logf(
-			level,
-			"completed with %d %s in %v",
-			rw.code,
-			http.StatusText(rw.code),
-			time.Since(start),
-		)
+
+		logger.WithFields(logrus.Fields{
+			"status":      status,
+			"status_text": statusText,
+			"duration":    duration,
+		}).Log(level, "Request completed")
 	})
 }
 

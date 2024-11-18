@@ -21,25 +21,32 @@ var (
 )
 
 const (
-	loginURL            = "/login"
-	registrationURL     = "/registration"
-	refreshURL          = "/refresh"
-	signingKey          = "wqigowqieqwe21429832ywqeiuey8239y"
-	salt                = "sdhfkojsdjlkfjsdkeeeeedd"
-	authorizationHeader = "Authorization"
-	tokenTTL            = 20 * time.Minute
-	refreshTokenTTL     = 2 * time.Hour
+	loginURL        = "/login"
+	registrationURL = "/registration"
+	refreshURL      = "/refresh"
 )
 
+type Config struct {
+	BindAddr        string `toml:"bind_addr"`
+	LogLevel        string `toml:"log_level"`
+	DatabaseURL     string `toml:"database_url"`
+	SessionKey      string `toml:"session_key"`
+	SigningKey      string `toml:"singing_key"`
+	Salt            string `toml:"salt"`
+	TokenTTL        int64  `toml:"token_ttl"`
+	RefreshTokenTTL int64  `toml:"refresh_token_ttl"`
+}
 type handler struct {
 	handlers.BaseHandler
-	store store.Store
+	store  store.Store
+	config *Config
 }
 
-func NewHandler(store store.Store) handlers.Handler {
+func NewHandler(store store.Store, config *Config) handlers.Handler {
 	return &handler{
 		BaseHandler: handlers.BaseHandler{},
 		store:       store,
+		config:      config,
 	}
 }
 
@@ -99,7 +106,7 @@ func (h *handler) Login() http.HandlerFunc {
 			return
 		}
 
-		accessToken, refreshToken, err := token.GenerateTokens(u.ID)
+		accessToken, refreshToken, err := token.GenerateTokens(u.ID, (*token.Config)(h.config))
 		if err != nil {
 			h.Error(w, r, http.StatusUnauthorized, err)
 			return
@@ -118,7 +125,6 @@ func (h *handler) Login() http.HandlerFunc {
 
 func (h *handler) RefreshToken() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Чтение JSON из тела запроса
 		var requestBody struct {
 			RefreshToken string `json:"refresh_token"`
 		}
@@ -133,9 +139,9 @@ func (h *handler) RefreshToken() http.HandlerFunc {
 		claims := &jwt.StandardClaims{}
 
 		_, _ = jwt.ParseWithClaims(refreshToken, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(signingKey), nil
+			return []byte(h.config.SigningKey), nil
 		})
-		UserID, err := token.ParseToken(refreshToken)
+		UserID, err := token.ParseToken(refreshToken, (*token.Config)(h.config))
 		if err != nil {
 			h.Error(w, r, http.StatusUnauthorized, err)
 			return
@@ -146,7 +152,7 @@ func (h *handler) RefreshToken() http.HandlerFunc {
 		}
 		fmt.Println("Claims:", claims)
 		fmt.Println("User ID from token:", claims.Subject)
-		accessToken, newRefreshToken, err := token.GenerateTokens(UserID)
+		accessToken, newRefreshToken, err := token.GenerateTokens(UserID, (*token.Config)(h.config))
 		if err != nil {
 			h.Error(w, r, http.StatusUnauthorized, err)
 			return

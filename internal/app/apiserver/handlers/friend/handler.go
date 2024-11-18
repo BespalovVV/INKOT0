@@ -76,7 +76,6 @@ func (h *handler) IsFriends() http.HandlerFunc {
 	}
 }
 
-// show users no friends
 func (h *handler) UsersNotFriends() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, err := context.GetUser(r.Context())

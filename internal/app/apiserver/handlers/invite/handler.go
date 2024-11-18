@@ -56,7 +56,6 @@ func (h *handler) UserInvitesShow() http.HandlerFunc {
 	}
 }
 
-// create invites
 func (h *handler) CreateUserInvite() http.HandlerFunc {
 	type request struct {
 		To_user_id int `json:"to_id"`
@@ -81,7 +80,6 @@ func (h *handler) CreateUserInvite() http.HandlerFunc {
 	}
 }
 
-// delete invite
 func (h *handler) UserInviteDelete() http.HandlerFunc {
 	type request struct {
 		Front_user_id int `json:"front_id"`
@@ -106,7 +104,6 @@ func (h *handler) UserInviteDelete() http.HandlerFunc {
 	}
 }
 
-// accept invite
 func (h *handler) UserInviteAccept() http.HandlerFunc {
 	type request struct {
 		From_user_id int `json:"from_id"`

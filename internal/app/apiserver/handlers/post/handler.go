@@ -44,6 +44,7 @@ func (h *handler) Register(router *mux.Router) {
 	router.HandleFunc(postURL, h.PostPatch()).Methods(http.MethodPatch)
 	router.HandleFunc("/users/{id}/posts", h.UserPostsShow()).Methods(http.MethodGet)
 }
+
 func (h *handler) PostCreate() http.HandlerFunc {
 	type request struct {
 		Title     string `json:"title"`
@@ -58,7 +59,6 @@ func (h *handler) PostCreate() http.HandlerFunc {
 			return
 		}
 
-		// Получаем ID пользователя из контекста
 		userID, err := context.GetUser(r.Context())
 		if err != nil {
 			h.Error(w, r, http.StatusUnauthorized, err)
@@ -72,7 +72,6 @@ func (h *handler) PostCreate() http.HandlerFunc {
 			image = sql.NullString{Valid: false}
 		}
 
-		// Создаем новый пост
 		post := &model.Post{
 			Owner_id:  userID,
 			Title:     req.Title,
@@ -81,7 +80,6 @@ func (h *handler) PostCreate() http.HandlerFunc {
 			Image:     image,
 		}
 
-		// Сохраняем пост
 		if err := h.store.Post().Create(post); err != nil {
 			h.Error(w, r, http.StatusUnprocessableEntity, err)
 			return
@@ -90,7 +88,6 @@ func (h *handler) PostCreate() http.HandlerFunc {
 	}
 }
 func (h *handler) PostDelete() http.HandlerFunc {
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		num, err := strconv.Atoi(id)
@@ -168,7 +165,6 @@ func (h *handler) PostPatch() http.HandlerFunc {
 	}
 }
 
-// show all posts
 func (h *handler) Posts() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID, err := context.GetUser(r.Context())
@@ -187,7 +183,6 @@ func (h *handler) Posts() http.HandlerFunc {
 	}
 }
 
-// showonepost
 func (h *handler) Post() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
@@ -219,7 +214,6 @@ func (h *handler) Post() http.HandlerFunc {
 	}
 }
 
-// users posts
 func (h *handler) UserPostsShow() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
@@ -250,5 +244,3 @@ func (h *handler) UserPostsShow() http.HandlerFunc {
 		h.Respond(w, r, http.StatusOK, posts)
 	}
 }
-
-//endpostservise

@@ -67,6 +67,7 @@ func (h *handler) GetUsers() http.HandlerFunc {
 		h.Respond(w, r, http.StatusOK, users)
 	}
 }
+
 func (h *handler) DeleteUser() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
