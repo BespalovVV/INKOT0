@@ -159,42 +159,23 @@ func (r *UserRepository) SendInvite(from_id int, to_id int) error {
 	}
 	return nil
 }
-
-// ShowFriends implements store.UserRepository.
 func (r *UserRepository) ShowFriends(id int) ([]*model.User, string, error) {
-	rows, err := r.store.db.Query("SELECT friend_id FROM friends WHERE user_id = $1", id)
+
+	rows, err := r.store.db.Query(`SELECT * FROM get_user_friends($1)`, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, "", store.ErrRecordNotFound
 		}
-	}
-	defer rows.Close()
-	ids := "" + strconv.Itoa(id)
-	id0 := ""
-	for rows.Next() {
-		rows.Scan(&id0)
-		if err != nil {
-			return nil, "", err
-		}
-		ids += ", " + id0
-	}
-	fmt.Print("IDS::  ", ids)
-	if err = rows.Err(); err != nil {
 		return nil, "", err
 	}
-	rows0, err := r.store.db.Query(fmt.Sprintf("SELECT id, email, age, name, surname, description, image FROM users WHERE id IN (%v) AND id != (%d)", ids, id))
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, "", store.ErrRecordNotFound
-		}
-	}
-	count := ""
-	r.store.db.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM users WHERE id IN (%v)", ids)).Scan(&count)
-	defer rows0.Close()
+	defer rows.Close()
+
 	users := make([]*model.User, 0)
-	for rows0.Next() {
+	var count string
+
+	for rows.Next() {
 		user := new(model.User)
-		err := rows0.Scan(
+		err := rows.Scan(
 			&user.ID,
 			&user.Email,
 			&user.Age,
@@ -202,15 +183,22 @@ func (r *UserRepository) ShowFriends(id int) ([]*model.User, string, error) {
 			&user.Surname,
 			&user.Description,
 			&user.Image,
+			&count,
 		)
 		if err != nil {
 			return nil, "", err
 		}
 		users = append(users, user)
 	}
-	if err = rows0.Err(); err != nil {
+
+	if err = rows.Err(); err != nil {
 		return nil, "", err
 	}
+
+	if len(users) == 0 {
+		return nil, "", store.ErrRecordNotFound
+	}
+
 	return users, count, nil
 }
 
