@@ -16,7 +16,7 @@ func CorsSettings() *cors.Cors {
 		},
 		// Разрешаем только запросы с этого домена (например, фронтенд на порте 3000)
 		AllowedOrigins: []string{
-			"http://localhost:3000", // Разрешаем запросы только с localhost:3000
+			"http://localhost", // Разрешаем запросы только с localhost:3000
 		},
 		// Разрешаем использование cookies (для передачи авторизационных куков)
 		AllowCredentials: true,
