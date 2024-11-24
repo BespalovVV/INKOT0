@@ -17,6 +17,7 @@ type UserRepository interface {
 	ShowFriends(int) ([]*model.User, string, error)
 	ShowInvites(int) ([]*model.Invite, string, error)
 	DeleteInvite(int, int) error
+	GetUsersByIds([]int) ([]*model.User, error)
 }
 
 type PostRepository interface {

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/BespalovVV/INKOT0/internal/app/model"
 	"github.com/BespalovVV/INKOT0/internal/app/store"
@@ -11,6 +12,41 @@ import (
 
 type UserRepository struct {
 	store *Store
+}
+
+func (r *UserRepository) GetUsersByIds(ids []int) ([]*model.User, error) {
+	idStr := make([]string, len(ids))
+	for i, id := range ids {
+		idStr[i] = fmt.Sprintf("%d", id)
+	}
+
+	query := fmt.Sprintf("SELECT id, email, age, name, surname, description, image FROM users WHERE id IN (%s)", strings.Join(idStr, ", "))
+
+	rows, err := r.store.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := make([]*model.User, 0)
+	for rows.Next() {
+		user := new(model.User)
+		err := rows.Scan(
+			&user.ID,
+			&user.Email,
+			&user.Age,
+			&user.Name,
+			&user.Surname,
+			&user.Description,
+			&user.Image,
+		)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
 }
 
 // gerusers

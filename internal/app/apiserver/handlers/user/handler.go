@@ -36,6 +36,7 @@ func (h *handler) Register(router *mux.Router) {
 	router.HandleFunc(usersURL, h.GetUsers()).Methods(http.MethodGet)
 	router.HandleFunc(userURL, h.DeleteUser()).Methods(http.MethodDelete)
 	router.HandleFunc(userURL, h.PatchUser()).Methods(http.MethodPatch)
+	router.HandleFunc("/users/ids", h.GetUsersByIds()).Methods(http.MethodPost)
 }
 
 func (h *handler) GetUser() http.HandlerFunc {
@@ -53,6 +54,24 @@ func (h *handler) GetUser() http.HandlerFunc {
 		}
 		u.Sanitize()
 		h.Respond(w, r, http.StatusOK, u)
+	}
+}
+func (h *handler) GetUsersByIds() http.HandlerFunc {
+	type request struct {
+		Ids []int `json:"ids,omitempty"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		req := &request{}
+		if err := json.NewDecoder(r.Body).Decode(req); err != nil {
+			h.Error(w, r, http.StatusBadRequest, err)
+			return
+		}
+		users, err := h.store.User().GetUsersByIds(req.Ids)
+		if err != nil {
+			h.Error(w, r, http.StatusUnprocessableEntity, err)
+			return
+		}
+		h.Respond(w, r, http.StatusOK, users)
 	}
 }
 
