@@ -36,7 +36,7 @@ func (r *PostRepository) Update(id int, post *model.Post) error {
 }
 
 func (r *PostRepository) Show(id int) ([]*model.Post, string, error) {
-	rows, err := r.store.db.Query("SELECT id, owner_id, title, body, image FROM posts WHERE owner_id != $1 AND private = false", id)
+	rows, err := r.store.db.Query("SELECT p.id, p.owner_id, p.title, p.body, p.image FROM posts p LEFT JOIN friends f ON (f.user_id = $1 AND f.friend_id = p.owner_id) WHERE (p.owner_id != $1 AND p.private = false) OR (f.friend_id IS NOT NULL);", id)
 	count := ""
 	r.store.db.QueryRow("SELECT COUNT(*) FROM posts WHERE owner_id != $1 AND private = false", id).Scan(&count)
 	if err != nil {
